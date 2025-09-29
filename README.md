@@ -1,2 +1,2 @@
 # sinusRobot
-Code concerning my work related to the robot-assisted sinus training project
+Code concerning my work related to the robot-assisted sinus training project.
