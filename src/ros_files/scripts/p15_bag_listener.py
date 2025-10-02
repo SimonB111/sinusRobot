@@ -13,8 +13,8 @@ def listener():
     # init node with name listener
     rospy.init_node('listener', anonymous=True)
 
-    # subscribe to relevant topics
-    rospy.Subscriber("", PoseStamped, callback)
+    # subscribe to measured_cp topic
+    rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, callback)
 
 
     rospy.spin() # keep the node running
