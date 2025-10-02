@@ -6,7 +6,10 @@ import rospy
 from geometry_msgs.msg import PoseStamped
 
 def callback(data): # run when we get a new msg
-    rospy.loginfo(rospy.get_caller_id(), data.data)
+    # position and rotation are float64
+    # can access data.pose.position.x (y, z)
+    # can access data.pose.orientation.w (x, y, z)
+    rospy.loginfo(rospy.get_caller_id() + ' x: %.3f', data.pose.position.x)
 
 def listener():
 
