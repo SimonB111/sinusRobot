@@ -8,7 +8,7 @@ from geometry_msgs.msg import PoseStamped
 def callback(data: PoseStamped) -> None:
     '''
     invoked when receiving data from /measured_cp,
-    updates Robot variables
+    logs x position (for testing)
     Returns: None
     '''
     # position and rotation are float64
