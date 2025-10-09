@@ -154,7 +154,7 @@ include_directories(
 ## Install ##
 #############
 
-catkin_install_python(PROGRAMS scripts/p15_bag_listener.py
+catkin_install_python(PROGRAMS scripts/Robot.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
