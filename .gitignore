@@ -1,5 +1,3 @@
-.catkin_workspace
-
 ros_files.code-workspace
 /build/
 /devel/
