@@ -7,3 +7,4 @@ ros_files(GOOD).code-workspace
 /.catkin_tools/
 /.venv/
 src/ros_files/.venv/
+src/ros_files/.vscode/
