@@ -5,3 +5,5 @@ ros_files.code-workspace
 ros_files(GOOD).code-workspace
 /logs/
 /.catkin_tools/
+/.venv/
+src/ros_files/.venv/
