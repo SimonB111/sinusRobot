@@ -3,8 +3,7 @@
 import rospy
 import pyvista as pv
 from pyvistaqt import BackgroundPlotter
-from PyQt5.QtWidgets import QApplication
-import sys
+from PyQt5.QtCore import QTimer
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 from geometry_msgs.msg import PoseStamped
@@ -33,9 +32,17 @@ class Robot:
         rospy.loginfo(f"pos x: {pos.x:.3f}, y: {pos.y:.3f}, z: {pos.z:.3f}")
         rospy.loginfo(f"ori x: {ori.x:.3f}, y: {ori.y:.3f}, z: {ori.z:.3f}, w: {ori.w:.3f}")
 
-    def createListener(self) -> None:
+    def update(self) -> None:
         '''
-        Creates a node that listens to /measured_cp
+        Calls draw function if we have a valid pose
+        '''
+        if self.pose is not None:
+            self.drawEndEffector()
+
+    def runListener(self) -> None:
+        '''
+        Creates a node that listens to /measured_cp,
+        loops continuously
         Returns: None
         '''
         # init node with name listener
@@ -43,14 +50,11 @@ class Robot:
         # subscribe to measured_cp topic
         rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.callback)
 
-        rate = rospy.Rate(30)  # 30 Hz update rate
-        while not rospy.is_shutdown():
-            # update visuals
-            if self.pose is not None:
-                self.drawEndEffector()
-                self.plotter.update()
-            self.plotter.app.processEvents()
-            rate.sleep()
+        timer = QTimer()
+        # schedule task without blocking UI
+        timer.timeout.connect(self.update)
+        timer.start(33) # 30 Hz (33 is period in ms)
+        self.plotter.app.exec_()
 
     def drawEndEffector(self) -> None:
         '''
@@ -64,12 +68,15 @@ class Robot:
         if self.actor is None:
             # create mesh once
             arrowX = pv.Arrow(start=(pos.x, pos.y, pos.z), 
-                              direction=(1, 0, 0), scale=2)
+                              direction=(1, 0, 0), scale=1)
+            arrowY = pv.Arrow(start=(pos.x, pos.y, pos.z), 
+                              direction=(0, 1, 0), scale=1)
             arrowZ = pv.Arrow(start=(pos.x, pos.y, pos.z), 
                               direction=(0, 0, 1), scale=1)
-            self.effectorMesh = pv.merge([arrowX, arrowZ]) # combine meshes
+            # combine meshes
+            self.effectorMesh = pv.merge([arrowX, arrowY, arrowZ]) 
             self.meshSave = self.effectorMesh.copy()
-            self.actor = self.plotter.add_mesh(self.effectorMesh, color='blue')
+            self.actor = self.plotter.add_mesh(self.effectorMesh, color='red')
         else :
             # convert quaternion to rot matrix
             rot = Rot.from_quat((ori.x, ori.y, ori.z, ori.w))
@@ -86,4 +93,4 @@ class Robot:
 
 if __name__ == '__main__':
     sinusRobot = Robot()
-    sinusRobot.createListener()
+    sinusRobot.runListener()
