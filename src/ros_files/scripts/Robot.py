@@ -17,16 +17,29 @@ class Robot:
         Creates a Robot object with position and orientation
         '''
         self.pose = pose
+        self.endoPose = None
         self.plotter = BackgroundPlotter()
         self.actor = None
         
     def callback(self, poseIn: PoseStamped) -> None:
         '''
-        Invoked when receiving data from /measured_cp,
+        Invoked when receiving data from /REMS/Research/measured_cp,
         updates Robot attributes. Logs info
         Returns: None
         '''
         self.pose = poseIn
+        pos = self.pose.pose.position
+        ori = self.pose.pose.orientation
+        rospy.loginfo(f"pos x: {pos.x:.3f}, y: {pos.y:.3f}, z: {pos.z:.3f}")
+        rospy.loginfo(f"ori x: {ori.x:.3f}, y: {ori.y:.3f}, z: {ori.z:.3f}, w: {ori.w:.3f}")
+
+    def endoCallback(self, poseIn: PoseStamped) -> None:
+        '''
+        Invoked when receiving data from NDI/Endoscope/measured_cp,
+        updates Robot attributes. Logs info
+        Returns: None
+        '''
+        self.endoPose = poseIn
         pos = self.pose.pose.position
         ori = self.pose.pose.orientation
         rospy.loginfo(f"pos x: {pos.x:.3f}, y: {pos.y:.3f}, z: {pos.z:.3f}")
@@ -45,14 +58,13 @@ class Robot:
         loops continuously
         Returns: None
         '''
-
         # subscribe to measured_cp topic (PoseStamped)
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.callback)
 
-        # subscribe to atracsys/Endoscope/measured_cp ()
+        # subscribe to NDI/Endoscope/measured_cp ()
         rospy.init_node('listener', anonymous=True)
-        rospy.Subscriber("atracsys/Endoscope/measured_cp", PoseStamped, self.callback)
+        rospy.Subscriber("NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
 
         timer = QTimer()
         # schedule task without blocking UI
