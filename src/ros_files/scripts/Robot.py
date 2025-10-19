@@ -41,19 +41,23 @@ class Robot:
 
     def runListener(self) -> None:
         '''
-        Creates a node that listens to /measured_cp,
+        Creates nodes that listen to needed topics,
         loops continuously
         Returns: None
         '''
-        # init node with name listener
+
+        # subscribe to measured_cp topic (PoseStamped)
         rospy.init_node('listener', anonymous=True)
-        # subscribe to measured_cp topic
         rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.callback)
+
+        # subscribe to atracsys/Endoscope/measured_cp ()
+        rospy.init_node('listener', anonymous=True)
+        rospy.Subscriber("atracsys/Endoscope/measured_cp", PoseStamped, self.callback)
 
         timer = QTimer()
         # schedule task without blocking UI
         timer.timeout.connect(self.update)
-        timer.start(33) # 30 Hz (33 is period in ms)
+        timer.start(40) # 25 Hz (too fast refresh freezes sooner)
         self.plotter.app.exec_()
 
     def drawEndEffector(self) -> None:
@@ -86,10 +90,10 @@ class Robot:
             points = self.meshSave.points.copy()
             rotatedPoints = points.dot(rot_matrix.T)
             self.effectorMesh.points = rotatedPoints + np.array([pos.x, pos.y, pos.z])
-
+        
         self.plotter.show_axes()
         self.plotter.update() # update the display
- 
+  
 
 if __name__ == '__main__':
     sinusRobot = Robot()
