@@ -46,7 +46,7 @@ class Robot:
         '''
         Calls draw function if we have a valid pose
         '''
-        if self.pose is not None:
+        if self.pose is not None and self.endoPose is not None:
             self.draw()
 
     def runListeners(self) -> None:
@@ -58,18 +58,18 @@ class Robot:
         # initialize node and subscribe to appropriate topics
         rospy.init_node('listeners', anonymous=True)
         rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.callback)
-        rospy.Subscriber("NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
+        rospy.Subscriber("/NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
 
         timer = QTimer()
         # schedule task without blocking UI
         timer.timeout.connect(self.update)
-        timer.start(40) # 25 Hz (too fast refresh freezes sooner)
+        timer.start(50) # 20 Hz (too fast refresh freezes sooner)
         self.plotter.app.exec_()
 
     def draw(self) -> None:
         '''
-        Creates a basic 3D visualization of the end effector's
-        position and orientation
+        Creates a basic 3D visualization of the position and orientation of
+        the topics that are subscribed to
         Returns: None
         '''
         pos = self.pose.pose.position
