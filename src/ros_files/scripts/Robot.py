@@ -108,7 +108,7 @@ class Robot:
             # apply rot matrix to points in mesh
             points = self.arrowMeshSave.points.copy()
             rotatedPoints = points.dot(rot_matrix.T)
-            self.effectorMesh.points = rotatedPoints + np.array([ePos.x, ePos.y, ePos.z])
+            self.endoMesh.points = rotatedPoints + np.array([ePos.x, ePos.y, ePos.z])
 
         self.plotter.show_axes()
         self.plotter.update() # update the display
