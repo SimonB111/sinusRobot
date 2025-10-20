@@ -63,7 +63,7 @@ class Robot:
         timer = QTimer()
         # schedule task without blocking UI
         timer.timeout.connect(self.update)
-        timer.start(50) # 20 Hz (too fast refresh freezes sooner)
+        timer.start(60) # (too fast refresh freezes sooner)
         self.plotter.app.exec_()
 
     def draw(self) -> None:
@@ -80,19 +80,18 @@ class Robot:
 
         if self.actor is None:
             # create mesh once
-            arrowX = pv.Arrow(start=(pos.x, pos.y, pos.z), 
-                              direction=(1, 0, 0), scale=1)
-            arrowY = pv.Arrow(start=(pos.x, pos.y, pos.z), 
-                              direction=(0, 1, 0), scale=1)
-            arrowZ = pv.Arrow(start=(pos.x, pos.y, pos.z), 
-                              direction=(0, 0, 1), scale=1)
+            cubeX = pv.Cube(center=(-.5,0,0), x_length=1, y_length=0.1, z_length=0.1)
+            cubeY = pv.Cube(center=(0,-.5,0), x_length=0.1, y_length=1, z_length=0.1)
+            cubeZ = pv.Cube(center=(0,0,-.5), x_length=0.1, y_length=0.1, z_length=1)
             # combine meshes
-            self.effectorMesh = pv.merge([arrowX, arrowY, arrowZ]) 
+            self.effectorMesh = pv.merge([cubeX, cubeY, cubeZ]) 
             self.arrowMeshSave = self.effectorMesh.copy()
             self.actor = self.plotter.add_mesh(self.effectorMesh, color='red')
 
             self.endoMesh = self.effectorMesh.copy()
             self.endoActor = self.plotter.add_mesh(self.endoMesh, color='green')
+
+            self.plotter.show_axes() # only need to call once
         else :
             # convert quaternion to rot matrix
             rot = Rot.from_quat((ori.x, ori.y, ori.z, ori.w))
@@ -110,7 +109,6 @@ class Robot:
             rotatedPoints = points.dot(rot_matrix.T)
             self.endoMesh.points = rotatedPoints + np.array([ePos.x, ePos.y, ePos.z])
 
-        self.plotter.show_axes()
         self.plotter.update() # update the display
   
 
