@@ -154,6 +154,27 @@ class Robot:
         rotatedPoints = points.dot(rot_matrix.T)
         return rotatedPoints + np.array([pos.x, pos.y, pos.z])
 
+    def applyHomogenousTransform(self, points: pv.pyvista_ndarray, 
+                                 transform) -> pv.pyvista_ndarray:
+        '''
+        Applies a given 4x4 homogeneous transformation matrix to a set of points.
+        Parameters:
+            points: pv.pyvista_ndarray, points to be transformed
+            transform: the 4x4 homogeneous transformation matrix
+        Returns: 
+            output: pv.pyvista_ndarray, the transformed points
+        '''
+        # convert to homogenous points (need correct shape so we can do matrix mult)
+        N = points.shape[0]
+        homogeneousPoints = np.hstack((points, np.ones((N, 1)))) # now shape (N, 4)
+
+        # (transpose for matrix multiplication), output shape (N,4)
+        transformed_homogeneous = (transform @ homogeneousPoints.T).T  
+
+        # convert back to 3D by removing the homogeneous coordinate
+        transformed_points = transformed_homogeneous[:, :3] / transformed_homogeneous[:, 3, np.newaxis]
+        return transformed_points
+
     def draw(self) -> None:
         '''
         Creates a basic 3D visualization of the position and orientation of
@@ -182,8 +203,16 @@ class Robot:
         else :
             # transform (rotate and translate)
             self.effectorMesh.points = self.transformAxes(self.pose)
+
+            # these have extra steps since we need to transform these into
+            # the same frame as end effector from REMS/research/measured_cp
             self.endoMesh.points = self.transformAxes(self.endoPose)
+            self.endoMesh.points = self.applyHomogenousTransform(
+                self.endoMesh.points, self.T_cam2Gripper)
+            
             self.anatMesh.points = self.transformAxes(self.anatPose)
+            self.anatMesh.points = self.applyHomogenousTransform(
+                self.anatMesh.points, self.T_cam2Gripper)
 
         self.plotter.update() # update the display
   
