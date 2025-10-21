@@ -4,6 +4,7 @@ import rospy
 import pyvista as pv
 from pyvistaqt import BackgroundPlotter
 from PyQt5.QtCore import QTimer
+import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 from geometry_msgs.msg import PoseStamped
@@ -19,6 +20,21 @@ class Robot:
         self.pose = None
         self.endoPose = None
         self.anatPose = None
+
+        self.nTicks = 0
+
+        self.handEyeIsCalibrated = False
+        self.sampleCount = 0
+        self.maxSamples = 16
+        # allocate arrays with appropriate shape
+        self.tHand = np.zeros((self.maxSamples, 3)) 
+        self.tEye = np.zeros((self.maxSamples, 3))
+        self.rHand = np.zeros((self.maxSamples, 3, 3))
+        self.rEye = np.zeros((self.maxSamples, 3, 3))
+        # to be filled by calibrateHandEye,
+        # will be homogenous transform from cam to gripper
+        self.T_cam2Gripper = np.eye(4) 
+
         self.plotter = BackgroundPlotter()
         self.actor = None
         self.endoActor = None
@@ -55,7 +71,12 @@ class Robot:
         '''
         Calls draw function if we have a valid pose
         '''
-        if self.pose is not None and self.endoPose is not None and self.anatPose is not None:
+        if not self.handEyeIsCalibrated and self.nTicks % 2 == 0:
+            # run at half update rate to prevent large mismatch between REMS/NDI
+            self.collectHandEye(self.pose, self.endoPose)
+        elif not self.handEyeIsCalibrated:
+            self.nTicks += 1 # increment ticks while in calibration phase
+        elif self.pose is not None:
             self.draw()
 
     def runListeners(self) -> None:
@@ -73,8 +94,45 @@ class Robot:
         timer = QTimer()
         # schedule task without blocking UI
         timer.timeout.connect(self.update)
-        timer.start(65) # (too fast refresh freezes sooner)
+        timer.start(65) # ~15Hz (too fast refresh freezes sooner)
         self.plotter.app.exec_()
+
+    def collectHandEye(self, handPose: PoseStamped, eyePose: PoseStamped):
+        '''
+        Collects arrays full of translation vectors and
+        rotation matrices for both the hand and the eye.
+        Calls calibrateHandEye() when full and forms
+        self.T_cam2Gripper using the outputs
+        Parameters:
+            handPose: PoseStamped, pose in hand coords
+            eyePose: PoseStamped, corresponding pose in eye coords
+        '''
+        if self.sampleCount < self.maxSamples:
+            hPos = handPose.pose.position
+            hOri = handPose.pose.orientation
+            ePos = eyePose.pose.position
+            eOri = eyePose.pose.orientation
+
+            # fill current row with position vector
+            self.tHand[self.sampleCount, :] = [hPos.x, hPos.y, hPos.z]
+            self.tEye[self.sampleCount, :] = [ePos.x, ePos.y, ePos.z]
+
+            # turn quat to rot matrix and assign for rHand and rEye
+            hRot = Rot.from_quat((hOri.x, hOri.y, hOri.z, hOri.w))
+            self.rHand[self.sampleCount] = hRot.as_matrix()
+
+            eRot = Rot.from_quat((eOri.x, eOri.y, eOri.z, eOri.w))
+            self.rHand[self.sampleCount] = eRot.as_matrix()
+
+            self.sampleCount += 1 # move to next position
+        else: # run when we have all samples
+            rCam2Gripper, tCam2Gripper = cv2.calibrateHandEye(
+                self.rHand, self.tHand, self.rEye, self.tEye)
+            
+            self.T_cam2Gripper[:3, :3] = rCam2Gripper # rotation part
+            self.T_cam2Gripper[:3, 3] = tCam2Gripper.flatten() # translation part
+
+            self.handEyeIsCalibrated = True
 
     def transformAxes(self, poseIn: PoseStamped) -> None:
         '''
