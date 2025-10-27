@@ -31,9 +31,9 @@ class Robot:
         self.tEye = np.zeros((self.maxSamples, 3))
         self.rHand = np.zeros((self.maxSamples, 3, 3))
         self.rEye = np.zeros((self.maxSamples, 3, 3))
-        # to be filled by calibrateHandEye,
-        # will be homogenous transform from cam to gripper
-        self.T_cam2Gripper = np.eye(4) 
+        # to be filled by calibrate function
+        self.T_gripper2cam = np.eye(4) 
+        self.T_base2world = np.eye(4) 
 
         self.plotter = BackgroundPlotter()
         self.actor = None
@@ -69,7 +69,8 @@ class Robot:
 
     def update(self) -> None:
         '''
-        Calls draw function if we have a valid pose
+        Calls draw function if we have a valid pose, collects calibration
+        data if we haven't finished calibrating yet, updates ticks
         '''
         if not self.handEyeIsCalibrated and self.nTicks % 2 == 0:
             # run at half update rate to prevent large mismatch between REMS/NDI
@@ -97,21 +98,21 @@ class Robot:
         timer.start(65) # ~15Hz (too fast refresh freezes sooner)
         self.plotter.app.exec_()
 
-    def collectHandEye(self, handPose: PoseStamped, eyePose: PoseStamped):
+    def collectHandEye(self, handPose: PoseStamped, worldPose: PoseStamped):
         '''
         Collects arrays full of translation vectors and
-        rotation matrices for both the hand and the eye.
-        Calls calibrateHandEye() when full and forms
-        self.T_cam2Gripper using the outputs
+        rotation matrices for world2cam and base2gripper
+        Calls calibrateRobotWorldHandEye() when full
+        forms self.T_gripper2cam, self.T_base2world
         Parameters:
             handPose: PoseStamped, pose in hand coords
-            eyePose: PoseStamped, corresponding pose in eye coords
+            worldPose: PoseStamped, corresponding pose from NDI
         '''
         if self.sampleCount < self.maxSamples:
             hPos = handPose.pose.position
             hOri = handPose.pose.orientation
-            ePos = eyePose.pose.position
-            eOri = eyePose.pose.orientation
+            ePos = worldPose.pose.position
+            eOri = worldPose.pose.orientation
 
             # fill current row with position vector
             self.tHand[self.sampleCount, :] = [hPos.x, hPos.y, hPos.z]
@@ -125,12 +126,15 @@ class Robot:
             self.rHand[self.sampleCount] = eRot.as_matrix()
 
             self.sampleCount += 1 # move to next position
-        else: # run when we have all samples
-            rCam2Gripper, tCam2Gripper = cv2.calibrateHandEye(
-                self.rHand, self.tHand, self.rEye, self.tEye)
+        else: # call calibrate when we have all samples
+            rBase2World, tBase2World, rCam2Gripper, tCam2Gripper = cv2.calibrateRobotWorldHandEye(
+                self.rEye, self.tEye, self.rHand, self.tHand)
             
-            self.T_cam2Gripper[:3, :3] = rCam2Gripper # rotation part
-            self.T_cam2Gripper[:3, 3] = tCam2Gripper.flatten() # translation part
+            self.T_base2world[:3, :3] = rBase2World # rotation part
+            self.T_base2world[:3, 3] = tBase2World.flatten() # translation part
+
+            self.T_gripper2cam[:3, :3] = rCam2Gripper # rotation part
+            self.T_gripper2cam[:3, 3] = tCam2Gripper.flatten() # translation part
 
             self.handEyeIsCalibrated = True
 
@@ -204,15 +208,14 @@ class Robot:
             # transform (rotate and translate)
             self.effectorMesh.points = self.transformAxes(self.pose)
 
-            # these have extra steps since we need to transform these into
-            # the same frame as end effector from REMS/research/measured_cp
+            # these are transformed into same frame as REMS end effector
             self.endoMesh.points = self.transformAxes(self.endoPose)
             self.endoMesh.points = self.applyHomogenousTransform(
-                self.endoMesh.points, self.T_cam2Gripper)
+                self.endoMesh.points, self.T_gripper2cam)
             
             self.anatMesh.points = self.transformAxes(self.anatPose)
             self.anatMesh.points = self.applyHomogenousTransform(
-                self.anatMesh.points, self.T_cam2Gripper)
+                self.anatMesh.points, self.T_gripper2cam)
 
         self.plotter.update() # update the display
   
