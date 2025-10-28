@@ -34,6 +34,13 @@ class Robot:
         # to be filled by calibrate function
         self.T_gripper2cam = np.eye(4) 
         self.T_base2world = np.eye(4) 
+        # known transformation
+        self.marker2tip = np.array([
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0]
+        ]) 
 
         self.plotter = BackgroundPlotter()
         self.actor = None
@@ -158,7 +165,24 @@ class Robot:
         rotatedPoints = points.dot(rot_matrix.T)
         return rotatedPoints + np.array([pos.x, pos.y, pos.z])
 
-    def applyHomogenousTransform(self, points: pv.pyvista_ndarray, 
+    def inverse(T: np.array) -> np.array:
+        '''
+        Takes the inverse of a 4x4 homogeneous transformation matrix.
+        Parameters:
+            T: np.array, the homogeneous transformation to be inverted
+        Returns:
+            T_inv: np.array, the inverted transformation
+        '''
+        R = T[0:3, 0:3]            # rotation part
+        t = T[0:3, 3]              # translation part
+        R_inv = R.T                # inverse rotation is transpose
+        t_inv = -np.dot(R_inv, t)  # inverse translation
+        T_inv = np.eye(4)
+        T_inv[0:3, 0:3] = R_inv
+        T_inv[0:3, 3] = t_inv
+        return T_inv
+
+    def applyHomogeneousTransform(self, points: pv.pyvista_ndarray, 
                                  transform) -> pv.pyvista_ndarray:
         '''
         Applies a given 4x4 homogeneous transformation matrix to a set of points.
@@ -208,14 +232,19 @@ class Robot:
             # transform (rotate and translate)
             self.effectorMesh.points = self.transformAxes(self.pose)
 
-            # these are transformed into same frame as REMS end effector
+            # these need to be transformed to the base frame
+
             self.endoMesh.points = self.transformAxes(self.endoPose)
-            self.endoMesh.points = self.applyHomogenousTransform(
-                self.endoMesh.points, self.T_gripper2cam)
+            # after getting points relative to tracker, we apply world to base,
+            # end result is base to marker (endo)
+            self.endoMesh.points = self.applyHomogeneousTransform(
+                self.endoMesh.points, self.inverse(self.T_base2world))
             
             self.anatMesh.points = self.transformAxes(self.anatPose)
-            self.anatMesh.points = self.applyHomogenousTransform(
-                self.anatMesh.points, self.T_gripper2cam)
+            self.anatMesh.points = self.applyHomogeneousTransform(
+                self.anatMesh.points, self.inverse(self.T_base2world))
+            
+            
 
         self.plotter.update() # update the display
   
