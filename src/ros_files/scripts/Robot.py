@@ -224,9 +224,9 @@ class Robot:
         '''
         if self.gripperActor is None:
             # create mesh once
-            cubeX = pv.Cube(center=(.5,0,0), x_length=1, y_length=0.1, z_length=0.1)
-            cubeY = pv.Cube(center=(0,.5,0), x_length=0.1, y_length=1, z_length=0.1)
-            cubeZ = pv.Cube(center=(0,0,.5), x_length=0.1, y_length=0.1, z_length=1)
+            cubeX = pv.Cube(center=(1,0,0), x_length=2, y_length=0.2, z_length=0.2)
+            cubeY = pv.Cube(center=(0,1,0), x_length=0.2, y_length=2, z_length=0.2)
+            cubeZ = pv.Cube(center=(0,0,1), x_length=0.2, y_length=0.2, z_length=2)
             # combine meshes
             self.effectorMesh = pv.merge([cubeX, cubeY, cubeZ])
 
