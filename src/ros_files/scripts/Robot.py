@@ -17,8 +17,8 @@ class Robot:
         '''
         Creates a Robot object with position and orientation
         '''
-        self.pose = None
-        self.endoPose = None
+        self.gripperPose = None
+        self.endoMarkerPose = None
         self.anatPose = None
 
         self.nTicks = 0
@@ -32,8 +32,7 @@ class Robot:
         self.rHand = np.zeros((self.maxSamples, 3, 3))
         self.rEye = np.zeros((self.maxSamples, 3, 3))
         # to be filled by calibrate function
-        self.T_gripper2cam = np.eye(4) 
-        self.T_base2world = np.eye(4) 
+        self.T_marker2gripper = np.eye(4) 
         # known transformation
         self.marker2tip = np.array([
             [1.0, 0.0, 0.0, 0.0],
@@ -46,33 +45,29 @@ class Robot:
         self.actor = None
         self.endoActor = None
         
-    def callback(self, poseIn: PoseStamped) -> None:
+    def gripperCallback(self, poseIn: PoseStamped) -> None:
         '''
         Invoked when receiving data from /REMS/Research/measured_cp,
-        updates Robot attributes.
+        updates corresponding pose.
         Returns: None
         '''
-        self.pose = poseIn
+        self.gripperPose = poseIn
 
     def endoCallback(self, poseIn: PoseStamped) -> None:
         '''
         Invoked when receiving data from NDI/Endoscope/measured_cp,
-        updates Robot attributes.
+        updates corresponding pose.
         Returns: None
         '''
-        self.endoPose = poseIn
+        self.endoMarkerPose = poseIn
     
     def anatCallback(self, poseIn: PoseStamped) -> None:
         '''
         Invoked when receiving data from NDI/Endoscope/measured_cp,
-        updates Robot attributes.
+        updates corresponding pose.
         Returns: None
         '''
         self.anatPose = poseIn
-        pos = self.pose.pose.position
-        ori = self.pose.pose.orientation
-        rospy.loginfo(f"pos x: {pos.x:.3f}, y: {pos.y:.3f}, z: {pos.z:.3f}")
-        rospy.loginfo(f"ori x: {ori.x:.3f}, y: {ori.y:.3f}, z: {ori.z:.3f}, w: {ori.w:.3f}")
 
     def update(self) -> None:
         '''
@@ -81,10 +76,11 @@ class Robot:
         '''
         if not self.handEyeIsCalibrated and self.nTicks % 2 == 0:
             # run at half update rate to prevent large mismatch between REMS/NDI
-            self.collectHandEye(self.pose, self.endoPose)
+            # gripper is hand, marker corresponds to eye
+            self.collectHandEye(self.gripperPose, self.endoMarkerPose)
         elif not self.handEyeIsCalibrated:
             self.nTicks += 1 # increment ticks while in calibration phase
-        elif self.pose is not None:
+        elif self.gripperPose is not None:
             self.draw()
 
     def runListeners(self) -> None:
@@ -95,7 +91,7 @@ class Robot:
         '''
         # initialize node and subscribe to appropriate topics
         rospy.init_node('listeners', anonymous=True)
-        rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.callback)
+        rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.gripperCallback)
         rospy.Subscriber("/NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
         rospy.Subscriber("/NDI/Anatomy/measured_cp", PoseStamped, self.anatCallback)
 
@@ -105,21 +101,21 @@ class Robot:
         timer.start(65) # ~15Hz (too fast refresh freezes sooner)
         self.plotter.app.exec_()
 
-    def collectHandEye(self, handPose: PoseStamped, worldPose: PoseStamped):
+    def collectHandEye(self, gripperPose: PoseStamped, markerPose: PoseStamped):
         '''
         Collects arrays full of translation vectors and
-        rotation matrices for world2cam and base2gripper
-        Calls calibrateRobotWorldHandEye() when full
-        forms self.T_gripper2cam, self.T_base2world
+        rotation matrices for gripper2base and target2cam
+        Calls calibrateHandEye() when full
+        forms self.T_marker2gripper
         Parameters:
-            handPose: PoseStamped, pose in hand coords
-            worldPose: PoseStamped, corresponding pose from NDI
+            gripperPose: PoseStamped, representing gripper2base
+            markerPose: PoseStamped, representing target2cam (marker2NDI)
         '''
         if self.sampleCount < self.maxSamples:
-            hPos = handPose.pose.position
-            hOri = handPose.pose.orientation
-            ePos = worldPose.pose.position
-            eOri = worldPose.pose.orientation
+            hPos = gripperPose.pose.position
+            hOri = gripperPose.pose.orientation
+            ePos = markerPose.pose.position
+            eOri = markerPose.pose.orientation
 
             # fill current row with position vector
             self.tHand[self.sampleCount, :] = [hPos.x, hPos.y, hPos.z]
@@ -134,21 +130,27 @@ class Robot:
 
             self.sampleCount += 1 # move to next position
         else: # call calibrate when we have all samples
-            rBase2World, tBase2World, rCam2Gripper, tCam2Gripper = cv2.calibrateRobotWorldHandEye(
-                self.rEye, self.tEye, self.rHand, self.tHand)
+            rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
+                self.rHand, self.tHand, self.rEye, self.tEye)
             
-            self.T_base2world[:3, :3] = rBase2World # rotation part
-            self.T_base2world[:3, 3] = tBase2World.flatten() # translation part
-
-            self.T_gripper2cam[:3, :3] = rCam2Gripper # rotation part
-            self.T_gripper2cam[:3, 3] = tCam2Gripper.flatten() # translation part
+            self.T_marker2gripper[:3, :3] = rMarker2Gripper # rotation part
+            self.T_marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
 
             self.handEyeIsCalibrated = True
+
+    def poseToHomogeneous(self, pose: PoseStamped) -> np.array:
+        '''
+        Turns a given pose into a homogeneous transformation matrix
+        Parameters:
+            pose: PoseStamped, pose we want to turn into a transformation matrix
+        Returns:
+            output: np.array, the corresponding homogeneous transformation
+        '''
 
     def transformAxes(self, poseIn: PoseStamped) -> None:
         '''
         Creates a rotated and translated version of the standard 
-        axes to visualize the orientation
+        axes to visualize the given pose
         Parameters:
             poseIn: PoseStamped, the pose we want to translate to
         Returns: 
@@ -230,11 +232,11 @@ class Robot:
             self.plotter.show_axes() # only need to call once
         else :
             # transform (rotate and translate)
-            self.effectorMesh.points = self.transformAxes(self.pose)
+            self.effectorMesh.points = self.transformAxes(self.gripperPose)
 
             # these need to be transformed to the base frame
 
-            self.endoMesh.points = self.transformAxes(self.endoPose)
+            self.endoMesh.points = self.transformAxes(self.endoMarkerPose)
             # after getting points relative to tracker, we apply world to base,
             # end result is base to marker (endo)
             self.endoMesh.points = self.applyHomogeneousTransform(
@@ -244,8 +246,6 @@ class Robot:
             self.anatMesh.points = self.applyHomogeneousTransform(
                 self.anatMesh.points, self.inverse(self.T_base2world))
             
-            
-
         self.plotter.update() # update the display
   
 
