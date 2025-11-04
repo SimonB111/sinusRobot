@@ -138,14 +138,25 @@ class Robot:
 
             self.handEyeIsCalibrated = True
 
-    def poseToHomogeneous(self, pose: PoseStamped) -> np.array:
+    def poseToHomogeneous(self, poseIn: PoseStamped) -> np.array:
         '''
         Turns a given pose into a homogeneous transformation matrix
         Parameters:
-            pose: PoseStamped, pose we want to turn into a transformation matrix
+            poseIn: PoseStamped, pose we want to turn into a transformation matrix
         Returns:
             output: np.array, the corresponding homogeneous transformation
         '''
+        pos = poseIn.pose.position
+        ori = poseIn.pose.orientation
+        # convert quaternion to rot matrix
+        rot = Rot.from_quat((ori.x, ori.y, ori.z, ori.w))
+        rot_matrix = rot.as_matrix()
+
+        transform = np.eye(4)
+        transform[0:3, 0:3] = rot_matrix
+        transform[0:3, 3] = np.array([pos.x, pos.y, pos.z])
+
+        return transform
 
     def transformAxes(self, poseIn: PoseStamped) -> None:
         '''
