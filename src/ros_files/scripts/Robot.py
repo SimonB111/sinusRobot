@@ -25,7 +25,7 @@ class Robot:
 
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
-        self.maxSamples = 16
+        self.maxSamples = 32
         # allocate arrays with appropriate shape
         self.tHand = np.zeros((self.maxSamples, 3)) 
         self.tEye = np.zeros((self.maxSamples, 3))
@@ -34,10 +34,10 @@ class Robot:
         # to be filled by calibrate function
         self.T_marker2gripper = np.eye(4) 
         # known transformation
-        self.endoscope2marker = np.array([
+        self.T_endoscope2marker = np.array([
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
             [0.0, 0.0, 0.0, 1.0]
         ]) 
 
@@ -252,7 +252,8 @@ class Robot:
             #      these need to be transformed to the base frame
             # first get endoscope2base. Endoscope Tip: apply bTe = bTg gTm mTe
             self.endoscope2base = (self.poseToHomogeneous(self.gripperPose) 
-                                   @ self.T_marker2gripper @ self.endoscope2marker)
+                                   @ self.T_marker2gripper @ self.T_endoscope2marker)
+
             # apply transformation
             self.endoMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.endoscope2base)
