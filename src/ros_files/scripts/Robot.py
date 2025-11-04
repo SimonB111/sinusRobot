@@ -206,8 +206,8 @@ class Robot:
             output: pv.pyvista_ndarray, the transformed points
         '''
         # convert to homogenous points (need correct shape so we can do matrix mult)
-        N = points.points.shape[0]
-        homogeneousPoints = np.hstack((points.points, np.ones((N, 1)))) # now shape (N, 4)
+        N = points.shape[0]
+        homogeneousPoints = np.hstack((points, np.ones((N, 1)))) # now shape (N, 4)
 
         # (transpose for matrix multiplication), output shape (N,4)
         transformed_homogeneous = (transform @ homogeneousPoints.T).T  
@@ -253,9 +253,9 @@ class Robot:
             # first get endoscope2base. Endoscope Tip: apply bTe = bTg gTm mTe
             self.endoscope2base = (self.poseToHomogeneous(self.gripperPose) 
                                    @ self.T_marker2gripper @ self.endoscope2marker)
-            # apply transformation to default axis arrows copy
+            # apply transformation
             self.endoMesh.points = self.applyHomogeneousTransform(
-                self.arrowMeshSave.copy(), self.endoscope2base)
+                self.arrowMeshSave.points.copy(), self.endoscope2base)
 
         self.plotter.update() # update the display
   
