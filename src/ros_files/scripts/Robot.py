@@ -34,7 +34,7 @@ class Robot:
         # to be filled by calibrate function
         self.T_marker2gripper = np.eye(4) 
         # known transformation
-        self.marker2tip = np.array([
+        self.endoscope2marker = np.array([
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
             [0.0, 0.0, 0.0, 1.0],
@@ -42,7 +42,7 @@ class Robot:
         ]) 
 
         self.plotter = BackgroundPlotter()
-        self.actor = None
+        self.gripperActor = None
         self.endoActor = None
         
     def gripperCallback(self, poseIn: PoseStamped) -> None:
@@ -206,8 +206,8 @@ class Robot:
             output: pv.pyvista_ndarray, the transformed points
         '''
         # convert to homogenous points (need correct shape so we can do matrix mult)
-        N = points.shape[0]
-        homogeneousPoints = np.hstack((points, np.ones((N, 1)))) # now shape (N, 4)
+        N = points.points.shape[0]
+        homogeneousPoints = np.hstack((points.points, np.ones((N, 1)))) # now shape (N, 4)
 
         # (transpose for matrix multiplication), output shape (N,4)
         transformed_homogeneous = (transform @ homogeneousPoints.T).T  
@@ -222,7 +222,7 @@ class Robot:
         the topics that are subscribed to
         Returns: None
         '''
-        if self.actor is None:
+        if self.gripperActor is None:
             # create mesh once
             cubeX = pv.Cube(center=(.5,0,0), x_length=1, y_length=0.1, z_length=0.1)
             cubeY = pv.Cube(center=(0,.5,0), x_length=0.1, y_length=1, z_length=0.1)
@@ -232,31 +232,31 @@ class Robot:
 
             # copy meshes and assign to actor for each pose we visualize
             self.arrowMeshSave = self.effectorMesh.copy()
-            self.actor = self.plotter.add_mesh(self.effectorMesh, color='red')
+            self.gripperActor = self.plotter.add_mesh(self.effectorMesh, color='red')
+
+            # static axis at (0,0,0) representing the robot base
+            self.baseMesh = self.effectorMesh.copy()
+            self.plotter.add_mesh(self.baseMesh, color='black') 
 
             self.endoMesh = self.effectorMesh.copy()
             self.endoActor = self.plotter.add_mesh(self.endoMesh, color='green')
             
-            self.anatMesh = self.effectorMesh.copy()
-            self.anatActor = self.plotter.add_mesh(self.anatMesh, color='blue')
+            #self.anatMesh = self.effectorMesh.copy()
+            #self.anatActor = self.plotter.add_mesh(self.anatMesh, color='blue')
 
             self.plotter.show_axes() # only need to call once
         else :
-            # transform (rotate and translate)
+            # just need to apply pose for gripper 
             self.effectorMesh.points = self.transformAxes(self.gripperPose)
 
-            # these need to be transformed to the base frame
-
-            self.endoMesh.points = self.transformAxes(self.endoMarkerPose)
-            # after getting points relative to tracker, we apply world to base,
-            # end result is base to marker (endo)
+            #      these need to be transformed to the base frame
+            # first get endoscope2base. Endoscope Tip: apply bTe = bTg gTm mTe
+            self.endoscope2base = (self.poseToHomogeneous(self.gripperPose) 
+                                   @ self.T_marker2gripper @ self.endoscope2marker)
+            # apply transformation to default axis arrows copy
             self.endoMesh.points = self.applyHomogeneousTransform(
-                self.endoMesh.points, self.inverse(self.T_base2world))
-            
-            self.anatMesh.points = self.transformAxes(self.anatPose)
-            self.anatMesh.points = self.applyHomogeneousTransform(
-                self.anatMesh.points, self.inverse(self.T_base2world))
-            
+                self.arrowMeshSave.copy(), self.endoscope2base)
+
         self.plotter.update() # update the display
   
 
