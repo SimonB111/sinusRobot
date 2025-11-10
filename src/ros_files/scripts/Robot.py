@@ -52,6 +52,7 @@ class Robot:
         Returns: None
         '''
         self.gripperPose = poseIn
+        rospy.loginfo(f"REMS: {poseIn.pose.orientation.x}, {poseIn.pose.orientation.y}, {poseIn.pose.orientation.z}")
 
     def endoCallback(self, poseIn: PoseStamped) -> None:
         '''
@@ -60,6 +61,7 @@ class Robot:
         Returns: None
         '''
         self.endoMarkerPose = poseIn
+        rospy.loginfo(f"NDI: {poseIn.pose.orientation.x}, {poseIn.pose.orientation.y}, {poseIn.pose.orientation.z}")
     
     def anatCallback(self, poseIn: PoseStamped) -> None:
         '''
@@ -126,7 +128,7 @@ class Robot:
             self.rHand[self.sampleCount] = hRot.as_matrix()
 
             eRot = Rot.from_quat((eOri.x, eOri.y, eOri.z, eOri.w))
-            self.rHand[self.sampleCount] = eRot.as_matrix()
+            self.rEye[self.sampleCount] = eRot.as_matrix()
 
             self.sampleCount += 1 # move to next position
         else: # call calibrate when we have all samples
@@ -178,7 +180,7 @@ class Robot:
         rotatedPoints = points.dot(rot_matrix.T)
         return rotatedPoints + np.array([pos.x, pos.y, pos.z])
 
-    def inverse(T: np.array) -> np.array:
+    def inverse(self, T: np.array) -> np.array:
         '''
         Takes the inverse of a 4x4 homogeneous transformation matrix.
         Parameters:
@@ -240,23 +242,31 @@ class Robot:
 
             self.endoMesh = self.effectorMesh.copy()
             self.endoActor = self.plotter.add_mesh(self.endoMesh, color='green')
+
+            self.trackerMesh = self.effectorMesh.copy()
+            self.trackerActor = self.plotter.add_mesh(self.trackerMesh, color='blue')
             
             #self.anatMesh = self.effectorMesh.copy()
             #self.anatActor = self.plotter.add_mesh(self.anatMesh, color='blue')
 
             self.plotter.show_axes() # only need to call once
         else :
-            # just need to apply pose for gripper 
+            # directly apply pose transformation for gripper
             self.effectorMesh.points = self.transformAxes(self.gripperPose)
 
-            #      these need to be transformed to the base frame
-            # first get endoscope2base. Endoscope Tip: apply bTe = bTg gTm mTe
-            self.endoscope2base = (self.poseToHomogeneous(self.gripperPose) 
-                                   @ self.T_marker2gripper @ self.T_endoscope2marker)
-
-            # apply transformation
+            # Endoscope Tip: apply bTe = bTg gTm mTe
+            self.gripper2base = self.poseToHomogeneous(self.gripperPose)
+            self.endoscope2base = (self.gripper2base @ self.T_marker2gripper 
+                                   @ self.T_endoscope2marker)
             self.endoMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.endoscope2base)
+            
+            # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
+            self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
+            self.tracker2base = (self.gripper2base @ self.T_marker2gripper 
+                                 @ self.inverse(self.marker2tracker))
+            self.trackerMesh.points = self.applyHomogeneousTransform(
+                self.arrowMeshSave.points.copy(), self.tracker2base)
 
         self.plotter.update() # update the display
   
