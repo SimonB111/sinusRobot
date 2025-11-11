@@ -28,7 +28,8 @@ class Robot:
 
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
-        self.maxSamples = 32
+        self.maxSamples = 24
+        self.tolerance = 0.1 # usually at the lowest 0.01 up to 0.1
         # allocate arrays with appropriate shape
         self.tHand = np.zeros((self.maxSamples, 3)) 
         self.tEye = np.zeros((self.maxSamples, 3))
@@ -72,12 +73,15 @@ class Robot:
         Calls draw function if we have a valid pose, collects calibration
         data if we haven't finished calibrating yet, updates ticks
         '''
-        if not self.handEyeIsCalibrated and self.nTicks % 5 == 0:
-            # run at partial update rate to prevent large mismatch between REMS/NDI
-            # gripper is hand, marker corresponds to eye
-            self.collectHandEye(self.gripperPose, self.endoMarkerPose)
-        elif not self.handEyeIsCalibrated:
-            self.nTicks += 1 # increment ticks while in calibration phase
+        if not self.handEyeIsCalibrated:
+            # measure the difference in times
+            # collect that data pair if time difference within our tolerance
+            gripperTime = self.gripperPose.header.stamp.to_sec()
+            endoMarkerTime = self.endoMarkerPose.header.stamp.to_sec()
+            diff = abs(gripperTime - endoMarkerTime)
+            if diff < self.tolerance:
+                self.collectHandEye(self.gripperPose, self.endoMarkerPose)
+  
         elif self.gripperPose is not None:
             self.draw()
 
