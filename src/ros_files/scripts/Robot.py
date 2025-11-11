@@ -8,14 +8,17 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Float64
+import argparse
 
 class Robot:
     '''Class representing a robot'''
 
-    def __init__(self) -> None:
+    def __init__(self, calibMatrix: np.array = np.eye(4)) -> None:
         '''
-        Creates a Robot object with position and orientation
+        Creates a Robot object
+        Parameters:
+            calibMatrix: optionally specify a 4x4 calibration matrix.
+                         Defaults to the identity matrix.
         '''
         self.gripperPose = None
         self.endoMarkerPose = None
@@ -34,12 +37,7 @@ class Robot:
         # to be filled by calibrate function
         self.T_marker2gripper = np.eye(4) 
         # known transformation
-        self.T_endoscope2marker = np.array([
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0]
-        ]) 
+        self.T_endoscope2marker = calibMatrix
 
         self.plotter = BackgroundPlotter()
         self.gripperActor = None
@@ -52,7 +50,6 @@ class Robot:
         Returns: None
         '''
         self.gripperPose = poseIn
-        rospy.loginfo(f"REMS: {poseIn.pose.orientation.x}, {poseIn.pose.orientation.y}, {poseIn.pose.orientation.z}")
 
     def endoCallback(self, poseIn: PoseStamped) -> None:
         '''
@@ -61,7 +58,6 @@ class Robot:
         Returns: None
         '''
         self.endoMarkerPose = poseIn
-        rospy.loginfo(f"NDI: {poseIn.pose.orientation.x}, {poseIn.pose.orientation.y}, {poseIn.pose.orientation.z}")
     
     def anatCallback(self, poseIn: PoseStamped) -> None:
         '''
@@ -246,8 +242,8 @@ class Robot:
             self.trackerMesh = self.effectorMesh.copy()
             self.trackerActor = self.plotter.add_mesh(self.trackerMesh, color='blue')
             
-            #self.anatMesh = self.effectorMesh.copy()
-            #self.anatActor = self.plotter.add_mesh(self.anatMesh, color='blue')
+            self.anatMesh = self.effectorMesh.copy()
+            self.anatActor = self.plotter.add_mesh(self.anatMesh, color='brown')
 
             self.plotter.show_axes() # only need to call once
         else :
@@ -263,14 +259,35 @@ class Robot:
             
             # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
             self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
-            self.tracker2base = (self.gripper2base @ self.T_marker2gripper 
+            self.tracker2base = (self.T_marker2gripper 
                                  @ self.inverse(self.marker2tracker))
             self.trackerMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.tracker2base)
+            
+            # NDI Anatomy: apply bTam = bTT TTam
+            self.anatMarker2base = (self.tracker2base 
+                                    @ self.poseToHomogeneous(self.anatPose))
+            self.anatMesh.points = self.applyHomogeneousTransform(
+                self.arrowMeshSave.points.copy(), self.anatMarker2base)
 
         self.plotter.update() # update the display
   
 
 if __name__ == '__main__':
-    sinusRobot = Robot()
+    # setup parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--camera_calib", nargs=16, type=float, 
+                        help="Enter 16 numbers for a 4x4 calibration matrix, space separated")
+    args = parser.parse_args()
+
+    # if we were given an input
+    if args.camera_calib:
+        # turn flat list into 4x4
+        inputMatrix = np.array(args.camera_calib).reshape(4, 4)
+        rospy.loginfo(inputMatrix)
+    else:
+        inputMatrix = np.eye(4) # default to identity matrix
+
+    # run nodes and visualization
+    sinusRobot = Robot(inputMatrix)
     sinusRobot.runListeners()
