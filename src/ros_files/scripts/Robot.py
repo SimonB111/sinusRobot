@@ -37,7 +37,7 @@ class Robot:
         self.T_endoscope2marker = np.array([
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0]
         ]) 
 
@@ -76,8 +76,8 @@ class Robot:
         Calls draw function if we have a valid pose, collects calibration
         data if we haven't finished calibrating yet, updates ticks
         '''
-        if not self.handEyeIsCalibrated and self.nTicks % 2 == 0:
-            # run at half update rate to prevent large mismatch between REMS/NDI
+        if not self.handEyeIsCalibrated and self.nTicks % 5 == 0:
+            # run at partial update rate to prevent large mismatch between REMS/NDI
             # gripper is hand, marker corresponds to eye
             self.collectHandEye(self.gripperPose, self.endoMarkerPose)
         elif not self.handEyeIsCalibrated:
