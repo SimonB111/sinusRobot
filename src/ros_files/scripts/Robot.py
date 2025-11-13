@@ -24,12 +24,10 @@ class Robot:
         self.endoMarkerPose = None
         self.anatPose = None
 
-        self.nTicks = 0
-
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
-        self.maxSamples = 24
-        self.tolerance = 0.1 # usually at the lowest 0.01 up to 0.1
+        self.maxSamples = 100
+        self.tolerance = 0.06 # usually around .1, in seconds
         # allocate arrays with appropriate shape
         self.tHand = np.zeros((self.maxSamples, 3)) 
         self.tEye = np.zeros((self.maxSamples, 3))
@@ -55,10 +53,12 @@ class Robot:
     def endoCallback(self, poseIn: PoseStamped) -> None:
         '''
         Invoked when receiving data from NDI/Endoscope/measured_cp,
-        updates corresponding pose.
+        updates corresponding pose. Runs collectCalibData if not calibrated yet
         Returns: None
         '''
         self.endoMarkerPose = poseIn
+        if not self.handEyeIsCalibrated:
+            self.collectCalibData()
     
     def anatCallback(self, poseIn: PoseStamped) -> None:
         '''
@@ -68,21 +68,25 @@ class Robot:
         '''
         self.anatPose = poseIn
 
+    def collectCalibData(self) -> None:
+        '''
+        Collects calibration data if they are within time difference tolerance
+
+        '''
+        # measure the difference in times
+        # collect that data pair if time difference within our tolerance
+        gripperTime = self.gripperPose.header.stamp.to_sec()
+        endoMarkerTime = self.endoMarkerPose.header.stamp.to_sec()
+        diff = abs(gripperTime - endoMarkerTime)
+        if diff < self.tolerance:
+            rospy.loginfo(f"{self.sampleCount} of {self.maxSamples} samples, time diff = {diff}")
+            self.collectHandEye(self.gripperPose, self.endoMarkerPose)
+
     def update(self) -> None:
         '''
-        Calls draw function if we have a valid pose, collects calibration
-        data if we haven't finished calibrating yet, updates ticks
+        Calls draw function if we have a valid pose
         '''
-        if not self.handEyeIsCalibrated:
-            # measure the difference in times
-            # collect that data pair if time difference within our tolerance
-            gripperTime = self.gripperPose.header.stamp.to_sec()
-            endoMarkerTime = self.endoMarkerPose.header.stamp.to_sec()
-            diff = abs(gripperTime - endoMarkerTime)
-            if diff < self.tolerance:
-                self.collectHandEye(self.gripperPose, self.endoMarkerPose)
-  
-        elif self.gripperPose is not None:
+        if self.gripperPose is not None:
             self.draw()
 
     def runListeners(self) -> None:
@@ -263,7 +267,7 @@ class Robot:
             
             # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
             self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
-            self.tracker2base = (self.T_marker2gripper 
+            self.tracker2base = (self.gripper2base @ self.T_marker2gripper 
                                  @ self.inverse(self.marker2tracker))
             self.trackerMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.tracker2base)
