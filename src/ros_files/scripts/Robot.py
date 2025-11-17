@@ -26,7 +26,7 @@ class Robot:
 
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
-        self.maxSamples = 100
+        self.maxSamples = 200
         self.tolerance = 0.06 # usually around .1, in seconds
         # allocate arrays with appropriate shape
         self.tHand = np.zeros((self.maxSamples, 3)) 
@@ -123,10 +123,6 @@ class Robot:
             ePos = markerPose.pose.position
             eOri = markerPose.pose.orientation
 
-            # fill current row with position vector
-            self.tHand[self.sampleCount, :] = [hPos.x, hPos.y, hPos.z]
-            self.tEye[self.sampleCount, :] = [ePos.x, ePos.y, ePos.z]
-
             # turn quat to rot matrix and assign for rHand and rEye
             hRot = Rot.from_quat((hOri.x, hOri.y, hOri.z, hOri.w))
             self.rHand[self.sampleCount] = hRot.as_matrix()
@@ -134,6 +130,10 @@ class Robot:
             eRot = Rot.from_quat((eOri.x, eOri.y, eOri.z, eOri.w))
             self.rEye[self.sampleCount] = eRot.as_matrix()
 
+            # fill current row with position vector
+            self.tHand[self.sampleCount, :] = [hPos.x, hPos.y, hPos.z]
+            self.tEye[self.sampleCount, :] = [ePos.x, ePos.y, ePos.z]
+            
             self.sampleCount += 1 # move to next position
         else: # call calibrate when we have all samples
             rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
@@ -141,6 +141,8 @@ class Robot:
             
             self.T_marker2gripper[:3, :3] = rMarker2Gripper # rotation part
             self.T_marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
+
+            rospy.loginfo(self.T_marker2gripper)
 
             self.handEyeIsCalibrated = True
 
@@ -284,14 +286,16 @@ class Robot:
 if __name__ == '__main__':
     # setup parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--camera_calib", nargs=16, type=float, 
-                        help="Enter 16 numbers for a 4x4 calibration matrix, space separated")
+    parser.add_argument("--camera_calib", 
+                        help="provide path to .txt file containing space delimited 4x4 calib matrix")
     args = parser.parse_args()
 
     # if we were given an input
     if args.camera_calib:
+        # read in array
+        flatInputMatrix = np.loadtxt(args.camera_calib)
         # turn flat list into 4x4
-        inputMatrix = np.array(args.camera_calib).reshape(4, 4)
+        inputMatrix = flatInputMatrix.reshape(4, 4)
         rospy.loginfo(inputMatrix)
     else:
         inputMatrix = np.eye(4) # default to identity matrix
