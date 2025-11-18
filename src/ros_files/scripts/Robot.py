@@ -260,7 +260,7 @@ class Robot:
             # directly apply pose transformation for gripper
             self.gripper2base = self.poseToHomogeneous(self.gripperPose)
             self.effectorMesh.points = self.applyHomogeneousTransform(
-                self.arrowMeshSave.points.copy(), self.inverse(self.gripper2base))
+                self.arrowMeshSave.points.copy(), self.gripper2base)
 
             # Endoscope Tip: apply bTe = bTT TTm mTe
             self.endoMarker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
