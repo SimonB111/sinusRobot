@@ -27,14 +27,14 @@ class Robot:
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
         self.maxSamples = 200
-        self.tolerance = 0.06 # usually around .5-.1, in seconds
+        self.tolerance = 0.06 # usually around .1, in seconds
         # allocate arrays with appropriate shape
         self.tHand = np.zeros((self.maxSamples, 3)) 
         self.tEye = np.zeros((self.maxSamples, 3))
         self.rHand = np.zeros((self.maxSamples, 3, 3))
         self.rEye = np.zeros((self.maxSamples, 3, 3))
         # to be filled by calibrate function
-        self.T_camera2base = np.eye(4) 
+        self.T_marker2gripper = np.eye(4) 
         # known transformation
         self.T_endoscope2marker = calibMatrix
 
@@ -112,7 +112,7 @@ class Robot:
         Collects arrays full of translation vectors and
         rotation matrices for gripper2base and target2cam
         Calls calibrateHandEye() when full
-        forms self.T_camera2base
+        forms self.T_marker2gripper
         Parameters:
             gripperPose: PoseStamped, representing gripper2base
             markerPose: PoseStamped, representing target2cam (marker2NDI)
@@ -128,21 +128,24 @@ class Robot:
             self.rHand[self.sampleCount] = hRot.as_matrix()
 
             eRot = Rot.from_quat((eOri.x, eOri.y, eOri.z, eOri.w))
-            self.rEye[self.sampleCount] = eRot.as_matrix()
+            invEyeRot = eRot.as_matrix().T # invert eye
+            self.rEye[self.sampleCount] = invEyeRot
 
             # fill current row with position vector
             self.tHand[self.sampleCount, :] = [hPos.x, hPos.y, hPos.z]
-            self.tEye[self.sampleCount, :] = [ePos.x, ePos.y, ePos.z]
+            # invert eye
+            invEyeTranslation = invEyeRot @ -np.array([ePos.x, ePos.y, ePos.z])
+            self.tEye[self.sampleCount, :] = invEyeTranslation
             
             self.sampleCount += 1 # move to next position
         else: # call calibrate when we have all samples
-            rcamera2base, tcamera2base = cv2.calibrateHandEye(
+            rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
                 self.rHand, self.tHand, self.rEye, self.tEye)
             
-            self.T_camera2base[:3, :3] = rcamera2base # rotation part
-            self.T_camera2base[:3, 3] = tcamera2base.flatten() # translation part
+            self.T_marker2gripper[:3, :3] = rMarker2Gripper # rotation part
+            self.T_marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
 
-            rospy.loginfo(self.T_camera2base)
+            rospy.loginfo(self.T_marker2gripper)
 
             self.handEyeIsCalibrated = True
 
@@ -258,25 +261,25 @@ class Robot:
             self.plotter.show_axes() # only need to call once
         else :
             # directly apply pose transformation for gripper
-            self.gripper2base = self.poseToHomogeneous(self.gripperPose)
-            self.effectorMesh.points = self.applyHomogeneousTransform(
-                self.arrowMeshSave.points.copy(), self.gripper2base)
+            self.effectorMesh.points = self.transformAxes(self.gripperPose)
 
-            # Endoscope Tip: apply bTe = bTT TTm mTe
-            self.endoMarker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
-            self.endoscope2base = (self.T_camera2base 
-                                   @ self.endoMarker2tracker @ self.T_endoscope2marker)
+            # Endoscope Tip: apply bTe = bTg gTm mTe
+            self.gripper2base = self.poseToHomogeneous(self.gripperPose)
+            self.endoscope2base = (self.gripper2base @ self.T_marker2gripper 
+                                   @ self.T_endoscope2marker)
             self.endoMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.endoscope2base)
             
-            # NDI Origin: apply bTT = bTc
-            self.tracker2base = self.T_camera2base
+            # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
+            self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
+            self.tracker2base = (self.gripper2base @ self.T_marker2gripper 
+                                 @ self.inverse(self.marker2tracker))
             self.trackerMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.tracker2base)
             
             # NDI Anatomy: apply bTam = bTT TTam
-            self.anatMarker2tracker = self.poseToHomogeneous(self.anatPose)
-            self.anatMarker2base = (self.tracker2base @ self.anatMarker2tracker)
+            self.anatMarker2base = (self.tracker2base 
+                                    @ self.poseToHomogeneous(self.anatPose))
             self.anatMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.anatMarker2base)
 
