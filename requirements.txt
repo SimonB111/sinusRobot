@@ -1,0 +1,6 @@
+pyvista
+pyvistaqt
+PyQt5
+opencv-python
+numpy
+scipy
