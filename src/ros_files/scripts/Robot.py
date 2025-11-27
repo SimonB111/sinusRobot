@@ -34,9 +34,9 @@ class Robot:
         self.rHand = np.zeros((self.maxSamples, 3, 3))
         self.rEye = np.zeros((self.maxSamples, 3, 3))
         # to be filled by calibrate function
-        self.T_marker2gripper = np.eye(4) 
+        self.marker2gripper = np.eye(4) 
         # known transformation
-        self.T_endoscope2marker = calibMatrix
+        self.endoscope2marker = calibMatrix
 
         self.plotter = BackgroundPlotter()
         self.gripperActor = None
@@ -112,7 +112,7 @@ class Robot:
         Collects arrays full of translation vectors and
         rotation matrices for gripper2base and target2cam
         Calls calibrateHandEye() when full
-        forms self.T_marker2gripper
+        forms self.marker2gripper
         Parameters:
             gripperPose: PoseStamped, representing gripper2base
             markerPose: PoseStamped, representing target2cam (marker2NDI)
@@ -142,10 +142,10 @@ class Robot:
             rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
                 self.rHand, self.tHand, self.rEye, self.tEye)
             
-            self.T_marker2gripper[:3, :3] = rMarker2Gripper # rotation part
-            self.T_marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
+            self.marker2gripper[:3, :3] = rMarker2Gripper # rotation part
+            self.marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
 
-            rospy.loginfo(self.T_marker2gripper)
+            rospy.loginfo(self.marker2gripper)
 
             self.handEyeIsCalibrated = True
 
@@ -265,14 +265,14 @@ class Robot:
 
             # Endoscope Tip: apply bTe = bTg gTm mTe
             self.gripper2base = self.poseToHomogeneous(self.gripperPose)
-            self.endoscope2base = (self.gripper2base @ self.T_marker2gripper 
-                                   @ self.T_endoscope2marker)
+            self.endoscope2base = (self.gripper2base @ self.marker2gripper 
+                                   @ self.endoscope2marker)
             self.endoMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.endoscope2base)
             
             # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
             self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
-            self.tracker2base = (self.gripper2base @ self.T_marker2gripper 
+            self.tracker2base = (self.gripper2base @ self.marker2gripper 
                                  @ self.inverse(self.marker2tracker))
             self.trackerMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.tracker2base)
