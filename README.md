@@ -12,7 +12,7 @@ Command-line tool to calibrate a robot and tracker by listening to ROS `PoseStam
 
 ### Basic usage
 
-python CalibrateRobotTracker.py <output_path>
+python3 CalibrateRobotTracker.py <output_path>
 
 - `output_path` (required): Path to the output `.txt` file where calibration results will be saved.
 
@@ -25,12 +25,12 @@ By default, the script listens to:
 
 To override these with your own topics:
 
-python CalibrateRobotTracker.py <output_path>
+python3 CalibrateRobotTracker.py <output_path>
 --custom_topics <hand_topic> <eye_topic>
 
 **Example:**
 
-python CalibrateRobotTracker.py results/calibration.txt
+python3 CalibrateRobotTracker.py results/calibration.txt
 --custom_topics /robot/hand_pose /tracker/eye_pose
 
 Each custom topic must publish `geometry_msgs/PoseStamped`.
@@ -39,17 +39,17 @@ Each custom topic must publish `geometry_msgs/PoseStamped`.
 
 To run calibration on pre-recorded data from a `.bag` file:
 
-python CalibrateRobotTracker.py <output_path>
+python3 CalibrateRobotTracker.py <output_path>
 --from_bag <bag_path>
 
 **Example:**
 
-python CalibrateRobotTracker.py results/calibration.txt
+python3 CalibrateRobotTracker.py results/calibration.txt
 --from_bag data/session1.bag
 
 You can combine this with custom topics:
 
-python CalibrateRobotTracker.py results/calibration.txt
+python3 CalibrateRobotTracker.py results/calibration.txt
 --custom_topics /robot/hand_pose /tracker/eye_pose
 --from_bag data/session1.bag
 
@@ -64,7 +64,7 @@ Command-line tool to visualize robot poses and transformations using PyVista 3D 
 
 ### Basic usage
 
-python RobotVisualizer.py <marker2gripper_matrix>
+python3 RobotVisualizer.py <marker2gripper_matrix>
 
 - `marker2gripper_matrix` (required): Path to `.txt` file with space-delimited 4x4 transformation matrix (marker → gripper).
 
@@ -72,12 +72,12 @@ python RobotVisualizer.py <marker2gripper_matrix>
 
 Provide endoscope-to-marker transformation (defaults to identity matrix):
 
-python RobotVisualizer.py <marker2gripper_matrix>
+python3 RobotVisualizer.py <marker2gripper_matrix>
 --endoscope2marker_matrix <endoscope2marker_matrix>
 
 **Example:**
 
-python RobotVisualizer.py transforms/marker2gripper.txt
+python3 RobotVisualizer.py transforms/marker2gripper.txt
 --endoscope2marker_matrix transforms/endo2marker.txt
 
 ### Input file format
