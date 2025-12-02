@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
 import rosbag
@@ -79,14 +79,15 @@ class CalibrateRobotTracker:
         rospy.init_node('listeners', anonymous=True)
         rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.gripperCallback)
         rospy.Subscriber("/NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
+        # stay running
+        rate = rospy.Rate(10)  # 10 Hz
+        while not rospy.is_shutdown():
+            if self.handEyeIsCalibrated:
+                rospy.signal_shutdown("Calibration Complete")
+                break
+            rate.sleep()
 
-        timer = QTimer()
-        # schedule task without blocking UI
-        timer.timeout.connect(self.update)
-        timer.start(65) # ~15Hz (too fast refresh may freeze sooner)
-        self.plotter.app.exec_()
-
-    def extractData(self):
+    def extractData(self, bagPath):
         '''
         Calls collectHandEye with pairs of hand and eye data that are within the
         time tolerance limit until calibration is done, using data from the
@@ -94,23 +95,44 @@ class CalibrateRobotTracker:
         The function is designed to calculate marker2gripper, where the marker is 
         connected to the moving gripper, and the camera/tracker is stationary.
         '''
+        # track when meaningful movement starts to avoid near-static data
+        # low pose-diversity will cause innacurate calibration
+        startedMoving = False  
+        tolerance = 0.0001 # move at least 0.1mm to trigger
+        lastPos = None
         # lists to store our extracted PoseStamped for hand and eye
         handPoses = []
         eyePoses = []
-        readPoses = 0
-        with rosbag.Bag(self.outputPath, 'r') as bag:
-            for topic, msg in bag.read_messages(topics=self.targetTopics):
+        usedPoses = 0
+        with rosbag.Bag(bagPath, 'r') as bag:
+            for topic, msg, t in bag.read_messages(topics=self.targetTopics):
+                pos = msg.pose.position
+
+                # detect meaningful movement from hand before collecting data
+                if not startedMoving: 
+                    if topic == self.targetTopics[0] and lastPos == None:
+                        lastPos = pos # get initial pos
+                    elif topic == self.targetTopics[0]:
+                        # find distance traveled in space by hand
+                        dist = np.sqrt(  (pos.x - lastPos.x)**2 
+                                       + (pos.y - lastPos.y)**2 
+                                       + (pos.z - lastPos.z)**2 )
+                        if dist > tolerance:
+                            startedMoving = True
+
                 # pack data into two lists
-                if topic == self.targetTopics[0]:
-                    handPoses.append(msg)
-                elif topic == self.targetTopics[1]:
-                    eyePoses.append(msg)
-                readPoses += 1
+                if startedMoving:
+                    if topic == self.targetTopics[0]:
+                        handPoses.append(msg)
+                    elif topic == self.targetTopics[1]:
+                        eyePoses.append(msg)
+                    usedPoses += 1
+
                 # place limit to prevent excessive time and space usage
                 # for large .bag files
-                if readPoses > self.maxSamples*7:
+                if usedPoses > self.maxSamples*20:
                     break
-            
+        
         hI = 0 # hand index
         eI = 0 # eye index
         while not self.handEyeIsCalibrated and hI < len(handPoses) and eI < len(eyePoses):
@@ -120,8 +142,9 @@ class CalibrateRobotTracker:
 
             # if we hit a final iteration without calibration,
             # then force calibration with existing data
-            if hI == len(handPoses)-1 or eI == len (eyePoses)-1:
+            if hI == len(handPoses)-1 or eI == len(eyePoses)-1:
                 self.forceCalibrate = True
+                print(f"forcing calibration, # of hand poses = {len(handPoses)}, hI = {hI}, eI = {eI}")
                 self.collectHandEye(handPoses[hI], eyePoses[eI])
                 break
 
@@ -204,9 +227,7 @@ if __name__ == '__main__':
                            "/NDI/Endoscope/measured_cp"]
     # if we were given custom topics
     if args.custom_topics:
-        currentTargetTopics.clear()
-        currentTargetTopics.append(args.custom_topics[0])
-        currentTargetTopics.append(args.custom_topics[1])
+        currentTargetTopics = args.custom_topics
 
     # if we were given an input .bag file
     if args.from_bag:
