@@ -55,7 +55,7 @@ python3 CalibrateRobotTracker.py results/calibration.txt
 
 If `--from_bag` is not provided, the script runs ROS listener nodes and waits for live messages on the specified topics.
 
-
+Note: extractData() attempts to wait for meaningful movement, effectively skipping the first part of a bag file when the robot may be still. However, in some cases the tolerance may need to be adjusted, especially for non-surgical systems were the magnitude is much greater.
 
 ## VisualizeRobotTracker
 <img width="490" height="322" alt="visualizeRobotFigure" src="https://github.com/user-attachments/assets/808da3df-017e-4d8c-b3c1-bce19519ca4c" />
