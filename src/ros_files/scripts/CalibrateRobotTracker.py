@@ -2,7 +2,6 @@
 
 import rospy
 import rosbag
-from PyQt5.QtCore import QTimer
 import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
@@ -98,7 +97,7 @@ class CalibrateRobotTracker:
         # track when meaningful movement starts to avoid near-static data
         # low pose-diversity will cause innacurate calibration
         startedMoving = False  
-        tolerance = 0.0001 # move at least 0.1mm to trigger
+        tolerance = 0.0059 # move at least this much (meters) to trigger collection
         lastPos = None
         # lists to store our extracted PoseStamped for hand and eye
         handPoses = []
@@ -130,7 +129,7 @@ class CalibrateRobotTracker:
 
                 # place limit to prevent excessive time and space usage
                 # for large .bag files
-                if usedPoses > self.maxSamples*20:
+                if usedPoses > self.maxSamples*200:
                     break
         
         hI = 0 # hand index
@@ -156,10 +155,10 @@ class CalibrateRobotTracker:
                 eI += 1
                 continue
 
-            if eyeTime < handTime:
+            if handTime < eyeTime:
+                hI += 1 # incrementing hand first since its faster refresh
+            elif eyeTime < handTime:
                 eI += 1
-            elif handTime < eyeTime:
-                hI += 1
 
     def collectHandEye(self, gripperPose: PoseStamped, markerPose: PoseStamped):
         '''
@@ -194,7 +193,7 @@ class CalibrateRobotTracker:
             self.sampleCount += 1 # move to next position
         else: # call calibrate when we have all samples
             rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
-                self.rHand, self.tHand, self.rEye, self.tEye)
+                self.rHand, self.tHand, self.rEye, self.tEye, cv2.CALIB_HAND_EYE_PARK)
             
             self.marker2gripper[:3, :3] = rMarker2Gripper # rotation part
             self.marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
