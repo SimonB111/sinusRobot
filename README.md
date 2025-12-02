@@ -4,7 +4,7 @@
 
 **VisualizeRobotTracker.py** produces a 3D visualization of the various frames of a surgical robot in the base frame, including the base, optical tracker origin, and the corresponding markers/tip of the tool (endoscope tip here).
 
-This code was tested using the Noetic distro of ROS, using Python 3.8.10, in WSL: Ubuntu-20.04. Ensure ROS Noetic is installed and call `roscore` prior to live calibration via the listener node.
+This code was tested using the Noetic distro of ROS, using Python 3.8.10, in WSL2: Ubuntu-20.04. Ensure ROS Noetic is installed and call `roscore` prior to live calibration via the listener node.
 
 ## CalibrateRobotTracker
 
