@@ -6,7 +6,7 @@
         # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>
 
     # Arguments:
-    # marker2gripper_matrix: REQUIRED, file path to the marker2gripper matrix, formatted as flattened 4x4 homogeneous transformation, space delimited
+    # marker2gripper_matrix: required, file path to the marker2gripper matrix, formatted as flattened 4x4 homogeneous transformation, space delimited
     # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
 
     # Output:

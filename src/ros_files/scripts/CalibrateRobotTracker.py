@@ -7,7 +7,7 @@
         # --from_bag <bag_path>  
 
     # Arguments:
-    # output_path: REQUIRED, file path for the marker2gripper matrix
+    # output_path: required, file path for the output marker2gripper matrix
     # --custom_topics <hand_topic> <eye_topic>: hand/eye rostopic paths
     # --from_bag: file path to the .bag to extract calibration data from (will not run nodes for live calibration)
 
@@ -235,13 +235,11 @@ class CalibrateRobotTracker:
 
 
 if __name__ == '__main__':
-    # usage:
-    # CalibrateRobotTracker.py <output_path> --custom_topics <hand_topic> <eye_topic> --from_bag <bag_path>  
-    # output path is required, the rest is optional
 
     # setup parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("output_path", default="output.txt", help="Required, path for output .txt")
+    # output path is "soft required" since we have a default in place
+    parser.add_argument("output_path", nargs="?", default="marker2gripper.txt", help="Required, path for output marker2gripper matrix .txt")
     parser.add_argument("--custom_topics", nargs=2, type=str,
                         help="Provide paths to hand, then eye rostopic. Each" \
                         "should post PoseStamped")
