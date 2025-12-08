@@ -55,7 +55,7 @@ python3 CalibrateRobotTracker.py results/calibration.txt
 
 If `--from_bag` is not provided, the script runs ROS listener nodes and waits for live messages on the specified topics.
 
-Note: extractData() attempts to wait for meaningful movement, effectively skipping the first part of a bag file when the robot may be still. However, in some cases the tolerance may need to be adjusted, especially for non-surgical systems were the magnitude is much greater.
+Note: extractData() attempts to wait for meaningful movement, effectively skipping the first part of a bag file when the robot may be still. However, in some cases the tolerance may need to be adjusted, especially for non-surgical systems where the magnitude is much greater.
 
 ## VisualizeRobotTracker
 <img width="490" height="322" alt="visualizeRobotFigure" src="https://github.com/user-attachments/assets/808da3df-017e-4d8c-b3c1-bce19519ca4c" />
@@ -84,7 +84,7 @@ python3 RobotVisualizer.py transforms/marker2gripper.txt
 
 Matrices must be space-delimited in `.txt` files, flattened 4x4 homogeneous transformation, such as:
 
-0.2491029687780142 0.89378931217035 -0.37294554079118875 0.04453415322749031 -0.031509519094885655 -0.3774011125814647 -0.9255136684180745 -0.07724043695033155 -0.9679642871265389 0.2422995370864854 -0.0658488661655321 0.13850916435667032 0.0 0.0 0.0 1.0
+`0.2491029687780142 0.89378931217035 -0.37294554079118875 0.04453415322749031 -0.031509519094885655 -0.3774011125814647 -0.9255136684180745 -0.07724043695033155 -0.9679642871265389 0.2422995370864854 -0.0658488661655321 0.13850916435667032 0.0 0.0 0.0 1.0`
 
 ### Features
 
