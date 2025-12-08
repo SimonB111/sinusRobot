@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
+    # Purpose: robot-tracker visualization
 
+    # Usage:
+    # VisualizeRobotTracker.py <marker2gripper_matrix> 
+        # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>
+
+    # Arguments:
+    # marker2gripper_matrix: REQUIRED, file path to the marker2gripper matrix, formatted as flattened 4x4 homogeneous transformation, space delimited
+    # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
+
+    # Output:
+    # live 3D visualization of gripper (red), marker/tool tip (green), tracker (blue), and anatomy (brown) poses
 import rospy
 import pyvista as pv
 from pyvistaqt import BackgroundPlotter
@@ -223,7 +234,7 @@ class Robot:
 if __name__ == '__main__':
     # setup parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("marker2gripper_matrix", help="required, path to .txt file" \
+    parser.add_argument("marker2gripper_matrix", required=True, help="required, path to .txt file" \
         "containing space delimited 4x4 marker2gripper transformation matrix")
     parser.add_argument("--endoscope2marker_matrix", 
                         help="provide path to .txt file containing space " \

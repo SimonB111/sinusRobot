@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+    # Purpose: robot-tracker calibration
+
+    # Usage:
+    # CalibrateRobotTracker.py <output_path> 
+        # --custom_topics <hand_topic> <eye_topic> 
+        # --from_bag <bag_path>  
+
+    # Arguments:
+    # output_path: REQUIRED, file path for the marker2gripper matrix
+    # --custom_topics <hand_topic> <eye_topic>: hand/eye rostopic paths
+    # --from_bag: file path to the .bag to extract calibration data from (will not run nodes for live calibration)
+
+    # Output:
+    # <output_path>: 4x4 homogeneous marker2gripper matrix, flattened, delimited by spaces
 
 import rospy
 import rosbag
@@ -25,7 +39,15 @@ class CalibrateRobotTracker:
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
         self.maxSamples = 150
+
+        # track when meaningful movement starts to avoid near-static data
+        # low pose-diversity will cause innacurate calibration
         self.tolerance = 0.06 # in seconds
+        self.distThreshold = 0.0059 # move at least this much (meters) to trigger collection
+        self.startedMoving = False  
+        self.lastPos = None
+        
+        self.startedMoving = False  
         self.forceCalibrate = False
         self.targetTopics = targetTopics
         # allocate arrays with appropriate shape
@@ -86,6 +108,24 @@ class CalibrateRobotTracker:
                 break
             rate.sleep()
 
+    def detectMotion(self, topic, pos) -> None:
+        '''
+        Helper function to check for meaningful movement since last pose
+        Parameters:
+            topic: topic of the current message
+            pos: position part of PoseStamped of current position
+        '''
+        # detect meaningful movement from hand before collecting data
+        if topic == self.targetTopics[0] and self.lastPos == None:
+            self.lastPos = pos # get initial pos
+        elif topic == self.targetTopics[0]:
+            # find distance traveled in space by hand
+            dist = np.sqrt(  (pos.x - self.lastPos.x)**2 
+                            + (pos.y - self.lastPos.y)**2 
+                            + (pos.z - self.lastPos.z)**2 )
+            if dist > self.distThreshold:
+                self.startedMoving = True
+
     def extractData(self, bagPath):
         '''
         Calls collectHandEye with pairs of hand and eye data that are within the
@@ -94,11 +134,7 @@ class CalibrateRobotTracker:
         The function is designed to calculate marker2gripper, where the marker is 
         connected to the moving gripper, and the camera/tracker is stationary.
         '''
-        # track when meaningful movement starts to avoid near-static data
-        # low pose-diversity will cause innacurate calibration
-        startedMoving = False  
-        tolerance = 0.0059 # move at least this much (meters) to trigger collection
-        lastPos = None
+      
         # lists to store our extracted PoseStamped for hand and eye
         handPoses = []
         eyePoses = []
@@ -107,20 +143,12 @@ class CalibrateRobotTracker:
             for topic, msg, t in bag.read_messages(topics=self.targetTopics):
                 pos = msg.pose.position
 
-                # detect meaningful movement from hand before collecting data
-                if not startedMoving: 
-                    if topic == self.targetTopics[0] and lastPos == None:
-                        lastPos = pos # get initial pos
-                    elif topic == self.targetTopics[0]:
-                        # find distance traveled in space by hand
-                        dist = np.sqrt(  (pos.x - lastPos.x)**2 
-                                       + (pos.y - lastPos.y)**2 
-                                       + (pos.z - lastPos.z)**2 )
-                        if dist > tolerance:
-                            startedMoving = True
+                # check for meaningful movement from hand before collecting data
+                if not self.startedMoving: 
+                    self.detectMotion(topic, pos)
 
                 # pack data into two lists
-                if startedMoving:
+                if self.startedMoving:
                     if topic == self.targetTopics[0]:
                         handPoses.append(msg)
                     elif topic == self.targetTopics[1]:
@@ -213,7 +241,7 @@ if __name__ == '__main__':
 
     # setup parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("output_path", help="Path for output .txt")
+    parser.add_argument("output_path", default="output.txt", help="Required, path for output .txt")
     parser.add_argument("--custom_topics", nargs=2, type=str,
                         help="Provide paths to hand, then eye rostopic. Each" \
                         "should post PoseStamped")
