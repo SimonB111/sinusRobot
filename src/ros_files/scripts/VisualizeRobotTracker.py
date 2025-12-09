@@ -234,7 +234,7 @@ class Robot:
 if __name__ == '__main__':
     # setup parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("marker2gripper_matrix", required=True, help="required, path to .txt file" \
+    parser.add_argument("marker2gripper_matrix", help="required, path to .txt file" \
         "containing space delimited 4x4 marker2gripper transformation matrix")
     parser.add_argument("--endoscope2marker_matrix", 
                         help="provide path to .txt file containing space " \
