@@ -1,5 +1,7 @@
 # sinusRobot
 
+https://github.com/user-attachments/assets/35a29895-2b79-436e-8394-1c772d38e065
+
 **CalibrateRobotTracker.py** calibrates the marker2gripper homogeneous transformation matrix using OpenCV, extracting the needed data from a .bag file, or by listening to provided topics posting the desired poses.
 
 **VisualizeRobotTracker.py** produces a 3D visualization of the various frames of a surgical robot in the base frame, including the base, optical tracker origin, and the corresponding markers/tip of the tool (endoscope tip here).
