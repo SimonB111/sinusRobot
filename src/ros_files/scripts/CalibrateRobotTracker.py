@@ -17,6 +17,7 @@
 import rospy
 import rosbag
 import cv2
+from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 from geometry_msgs.msg import PoseStamped
@@ -98,8 +99,8 @@ class CalibrateRobotTracker:
         '''
         # initialize node and subscribe to appropriate topics
         rospy.init_node('listeners', anonymous=True)
-        rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.gripperCallback)
-        rospy.Subscriber("/NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
+        rospy.Subscriber(self.targetTopics[0], PoseStamped, self.gripperCallback)
+        rospy.Subscriber(self.targetTopics[1], PoseStamped, self.endoCallback)
         # stay running
         rate = rospy.Rate(10)  # 10 Hz
         while not rospy.is_shutdown():
@@ -239,7 +240,7 @@ if __name__ == '__main__':
     # setup parser
     parser = argparse.ArgumentParser()
     # output path is "soft required" since we have a default in place
-    parser.add_argument("output_path", nargs="?", default="marker2gripper.txt", help="Required, path for output marker2gripper matrix .txt")
+    parser.add_argument("output_path", nargs="?", default="../output/marker2gripper.txt", type=Path, help="Required, path for output marker2gripper matrix .txt")
     parser.add_argument("--custom_topics", nargs=2, type=str,
                         help="Provide paths to hand, then eye rostopic. Each" \
                         "should post PoseStamped")
@@ -254,6 +255,8 @@ if __name__ == '__main__':
     if args.custom_topics:
         currentTargetTopics = args.custom_topics
 
+    args.output_path.parent.mkdir(parents=True, exist_ok=True)
+    
     # if we were given an input .bag file
     if args.from_bag:
         # extract data from .bag instead of running listeners
