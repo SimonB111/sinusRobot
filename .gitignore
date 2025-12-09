@@ -1,0 +1,13 @@
+ros_files.code-workspace
+/build/
+/devel/
+.catkin_workspace
+ros_files(GOOD).code-workspace
+/logs/
+/.catkin_tools/
+/.venv/
+src/ros_files/.venv/
+src/ros_files/.vscode/
+src/ros_files/output/marker2gripper.txt
+*.txt
+*.xml
