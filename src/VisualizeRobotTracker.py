@@ -35,6 +35,7 @@ class Robot:
         self.gripperPose = None
         self.endoMarkerPose = None
         self.anatPose = None
+        self.setCamera = False
 
         # known transformation from the marker to the gripper
         self.marker2gripper = inputMarker2Gripper
@@ -207,6 +208,9 @@ class Robot:
         else :
             # directly apply pose transformation for gripper
             self.effectorMesh.points = self.transformAxes(self.gripperPose)
+            if not self.setCamera: # During first draw, focus camera on mesh
+                self.plotter.reset_camera(bounds=self.effectorMesh.bounds)
+                self.setCamera = True
 
             # Endoscope Tip: apply bTe = bTg gTm mTe
             self.gripper2base = self.poseToHomogeneous(self.gripperPose)
