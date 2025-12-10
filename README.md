@@ -1,6 +1,6 @@
 # sinusRobot
 
-https://github.com/user-attachments/assets/35a29895-2b79-436e-8394-1c772d38e065
+https://github.com/user-attachments/assets/d3ff68a3-32b9-4695-a259-b45feb5d314a
 
 **CalibrateRobotTracker.py** calibrates the marker2gripper homogeneous transformation matrix using OpenCV, extracting the needed data from a .bag file, or by listening to provided topics posting the desired poses.
 
@@ -23,7 +23,9 @@ python3 CalibrateRobotTracker.py <output_path>
 By default, the script listens to:
 
 - `/REMS/Research/measured_cp` (hand)
-- `/NDI/Endoscope/measured_cp` (eye)
+- `/NDI/Endoscope
+
+/measured_cp` (eye)
 
 To override these with your own topics:
 
@@ -61,6 +63,7 @@ Note: extractData() attempts to wait for meaningful movement, effectively skippi
 
 ## VisualizeRobotTracker
 <img width="490" height="322" alt="visualizeRobotFigure" src="https://github.com/user-attachments/assets/808da3df-017e-4d8c-b3c1-bce19519ca4c" />
+<img width="541" height="322" alt="visualizeRobotFigure_surgicalScale_labeled" src="https://github.com/user-attachments/assets/6f5e0569-1946-44f6-ae92-91403ae5743d" />
 
 Command-line tool to visualize robot poses and transformations using PyVista 3D rendering and ROS `PoseStamped` topics.
 
