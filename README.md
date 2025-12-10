@@ -64,9 +64,6 @@ Note: extractData() attempts to wait for meaningful movement, effectively skippi
 ## VisualizeRobotTracker
 
 Command-line tool to visualize robot poses and transformations using PyVista 3D rendering and ROS `PoseStamped` topics.
-
-<img width="490" height="322" alt="visualizeRobotFigure" src="https://github.com/user-attachments/assets/808da3df-017e-4d8c-b3c1-bce19519ca4c" />
-     (enlarged axes)
      
 <img width="541" height="322" alt="visualizeRobotFigure_surgicalScale_labeled" src="https://github.com/user-attachments/assets/6f5e0569-1946-44f6-ae92-91403ae5743d" />
      (2cm surgical scale axes)
