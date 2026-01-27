@@ -8,11 +8,14 @@
     # Arguments:
     # marker2gripper_matrix: required, file path to the marker2gripper matrix, formatted as flattened 4x4 homogeneous transformation, space delimited
     # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
+    # --CT_pose <path_to_CT_pose_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
 
     # Output:
-    # live 3D visualization of gripper (red), marker/tool tip (green), tracker (blue), and anatomy (brown) poses
+    # live 3D visualization of gripper (red), marker/tool tip (green), 
+    # tracker (blue), and anatomy (brown) poses, in addition to CT mesh
 import rospy
 import pyvista as pv
+pv.global_theme.multi_samples = 0 # no anti aliasing to drop rendering load
 from pyvistaqt import BackgroundPlotter
 from PyQt5.QtCore import QTimer
 import numpy as np
@@ -23,7 +26,8 @@ import argparse
 class Robot:
     '''Class representing a robot'''
 
-    def __init__(self, inputMarker2Gripper: np.array, inputEndo2Marker: np.array = np.eye(4)) -> None:
+    def __init__(self, inputMarker2Gripper: np.array, inputEndo2Marker: np.array = np.eye(4), \
+                 inputCTPose: np.array = np.eye(4), inputMeshPath: str = '../example/ct_mesh.stl') -> None:
         '''
         Creates a Robot object
         Parameters:
@@ -31,6 +35,10 @@ class Robot:
                 the marker to the gripper
             inputEndo2Marker: optionally specify a 4x4 calibration matrix from
                 tool tip to the marker. Defaults to the identity matrix.
+            inputCTPose: optionally specify a 4x4 matrix defining the pose 
+                of the CT mesh
+            inputMeshPath: optionally provide a path to a CT scan mesh.
+                Defaults to the example mesh.
         '''
         self.gripperPose = None
         self.endoMarkerPose = None
@@ -41,6 +49,10 @@ class Robot:
         self.marker2gripper = inputMarker2Gripper
         # optionally given transformation
         self.endoscope2marker = inputEndo2Marker
+        # optionally given CT pose
+        self.CTPose = inputCTPose
+        
+        self.meshPath = inputMeshPath
 
         self.plotter = BackgroundPlotter()
         self.gripperActor = None
@@ -173,6 +185,22 @@ class Robot:
         transformed_points = transformed_homogeneous[:, :3] / transformed_homogeneous[:, 3, np.newaxis]
         return transformed_points
 
+    def setupCTMesh(self) -> None:
+        '''
+        Helper function to read in the CT scan mesh from file path, 
+        add to plotter, set transparency, and apply the given pose (self.CTPose)
+        '''
+    
+        raw_mesh = pv.read(self.meshPath)
+        self.CTMesh = raw_mesh.decimate(0.5) # decimate mesh since CT scans have massive poly count
+        self.CTMeshActor = self.plotter.add_mesh(self.CTMesh, color='pink', opacity=0.5)
+        # apply pose to CT mesh. bTct = (given)
+        self.CTMesh.points = self.applyHomogeneousTransform(
+            self.CTMesh.points.copy(), self.CTPose)
+        self.CTMesh.scale(.001, inplace=True) # scale to correct size
+
+
+
     def draw(self) -> None:
         '''
         Creates a basic 3D visualization of the position and orientation of
@@ -184,7 +212,6 @@ class Robot:
             cubeX = pv.Cube(center=(.01,0,0), x_length=.02, y_length=0.005, z_length=0.005)
             cubeY = pv.Cube(center=(0,.01,0), x_length=0.005, y_length=.02, z_length=0.005)
             cubeZ = pv.Cube(center=(0,0,.01), x_length=0.005, y_length=0.005, z_length=.02)
-            # combine meshes
             self.effectorMesh = pv.merge([cubeX, cubeY, cubeZ])
 
             # copy meshes and assign to actor for each pose we visualize
@@ -204,11 +231,14 @@ class Robot:
             self.anatMesh = self.effectorMesh.copy()
             self.anatActor = self.plotter.add_mesh(self.anatMesh, color='brown')
 
+            # setup CT mesh one time
+            self.setupCTMesh()
+            
             self.plotter.show_axes() # only need to call once
         else :
             # directly apply pose transformation for gripper
             self.effectorMesh.points = self.transformAxes(self.gripperPose)
-            if not self.setCamera: # During first draw, focus camera on mesh
+            if not self.setCamera: # During first draw, focus camera on EE mesh
                 self.plotter.reset_camera(bounds=self.effectorMesh.bounds)
                 self.setCamera = True
 
@@ -233,6 +263,7 @@ class Robot:
                 self.arrowMeshSave.points.copy(), self.anatMarker2base)
 
         self.plotter.update() # update the display
+        
   
 
 if __name__ == '__main__':
@@ -243,10 +274,14 @@ if __name__ == '__main__':
     parser.add_argument("--endoscope2marker_matrix", 
                         help="provide path to .txt file containing space " \
                         "delimited 4x4 endoscope2marker transformation matrix (optional)")
+    parser.add_argument("--CT_pose",
+                        help="provide path to .txt containing pose of CT scan mesh" \
+                            " as a space delimited 4x4 transformation matrix (optional)")
+    parser.add_argument("--CT_mesh",
+                        help="provide path to .stl of the CT scan mesh (optional)")
     args = parser.parse_args()
 
-    # if we were given an input endoscope2marker
-    if args.endoscope2marker_matrix:
+    if args.endoscope2marker_matrix: # handle optional endoscope2marker input
         # read in array
         rawEndo2Marker = np.loadtxt(args.endoscope2marker_matrix)
         # turn flat list into 4x4
@@ -254,10 +289,21 @@ if __name__ == '__main__':
     else:
         inputEndo2Marker = np.eye(4) # default to identity matrix
 
+    if args.CT_pose: # handle optional CT pose input
+        rawCTPose = np.loadtxt(args.CT_pose)
+        inputCTPose = rawCTPose.reshape(4, 4)
+    else:
+        inputCTPose = np.eye(4) # default to identity matrix
+
+    if args.CT_mesh: # handle optional CT mesh path input
+        inputMeshPath = args.CT_mesh
+    else:
+        inputMeshPath = '../example/Segmentation_Skin.stl' # default ct mesh
+
     # process the required marker2gripper
     rawMarker2Gripper = np.loadtxt(args.marker2gripper_matrix)
     inputMarker2Gripper = rawMarker2Gripper.reshape(4, 4)
 
     # run nodes and visualization
-    sinusRobot = Robot(inputMarker2Gripper, inputEndo2Marker)
+    sinusRobot = Robot(inputMarker2Gripper, inputEndo2Marker, inputCTPose, inputMeshPath)
     sinusRobot.runListeners()
