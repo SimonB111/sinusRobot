@@ -9,6 +9,8 @@
     # marker2gripper_matrix: required, file path to the marker2gripper matrix, formatted as flattened 4x4 homogeneous transformation, space delimited
     # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
     # --CT_pose <path_to_CT_pose_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
+    # --CT_mesh <path_to_CT_mesh>, optional, path to a valid mesh file
+    # --mesh_opacity <float 0.0 to 1.0>, optional, specify the level of transparency (1.0 = solid, 0.0 = invisible)
 
     # Output:
     # live 3D visualization of gripper (red), marker/tool tip (green), 
@@ -26,8 +28,11 @@ import argparse
 class Robot:
     '''Class representing a robot'''
 
-    def __init__(self, inputMarker2Gripper: np.array, inputEndo2Marker: np.array = np.eye(4), \
-                 inputCTPose: np.array = np.eye(4), inputMeshPath: str = '../example/ct_mesh.stl') -> None:
+    def __init__(self, inputMarker2Gripper: np.array, 
+                 inputEndo2Marker: np.array = np.eye(4),
+                 inputCTPose: np.array = np.eye(4), 
+                 inputMeshPath: str = '../example/Segmentation_Bone.stl',
+                 inputMeshOpacity: float = 0.5) -> None:
         '''
         Creates a Robot object
         Parameters:
@@ -39,6 +44,8 @@ class Robot:
                 of the CT mesh
             inputMeshPath: optionally provide a path to a CT scan mesh.
                 Defaults to the example mesh.
+            inputMeshOpacity: optionally provide an opacity value from 
+                0.0 (transparent) to 1.0 (solid). Defaults to 0.5.
         '''
         self.gripperPose = None
         self.endoMarkerPose = None
@@ -51,6 +58,8 @@ class Robot:
         self.endoscope2marker = inputEndo2Marker
         # optionally given CT pose
         self.CTPose = inputCTPose
+
+        self.opacity = inputMeshOpacity
         
         self.meshPath = inputMeshPath
 
@@ -193,7 +202,7 @@ class Robot:
     
         raw_mesh = pv.read(self.meshPath)
         self.CTMesh = raw_mesh.decimate(0.5) # decimate mesh since CT scans have massive poly count
-        self.CTMeshActor = self.plotter.add_mesh(self.CTMesh, color='pink', opacity=0.5)
+        self.CTMeshActor = self.plotter.add_mesh(self.CTMesh, color='pink', opacity=self.opacity)
         # apply pose to CT mesh. bTct = (given)
         self.CTMesh.points = self.applyHomogeneousTransform(
             self.CTMesh.points.copy(), self.CTPose)
@@ -279,6 +288,9 @@ if __name__ == '__main__':
                             " as a space delimited 4x4 transformation matrix (optional)")
     parser.add_argument("--CT_mesh",
                         help="provide path to .stl of the CT scan mesh (optional)")
+    parser.add_argument("--mesh_opacity",
+                        help="specify opacity value from (invisible) 0.0 - 1.0 (solid) (optional)")
+    
     args = parser.parse_args()
 
     if args.endoscope2marker_matrix: # handle optional endoscope2marker input
@@ -298,12 +310,17 @@ if __name__ == '__main__':
     if args.CT_mesh: # handle optional CT mesh path input
         inputMeshPath = args.CT_mesh
     else:
-        inputMeshPath = '../example/Segmentation_Skin.stl' # default ct mesh
+        inputMeshPath = '../example/Segmentation_Bone.stl' # default ct mesh
+
+    if args.mesh_opacity: # handle optional mesh opacity input
+        meshOpacity = args.mesh_opacity
+    else :
+        meshOpacity = 0.5 # default opacity
 
     # process the required marker2gripper
     rawMarker2Gripper = np.loadtxt(args.marker2gripper_matrix)
     inputMarker2Gripper = rawMarker2Gripper.reshape(4, 4)
 
     # run nodes and visualization
-    sinusRobot = Robot(inputMarker2Gripper, inputEndo2Marker, inputCTPose, inputMeshPath)
+    sinusRobot = Robot(inputMarker2Gripper, inputEndo2Marker, inputCTPose, inputMeshPath, meshOpacity)
     sinusRobot.runListeners()
