@@ -23,9 +23,9 @@ python3 CalibrateRobotTracker.py <output_path>
 By default, the script listens to:
 
 - `/REMS/Research/measured_cp` (hand)
-- `/NDI/Endoscope
+- `/NDI/Endoscope`
 
-/measured_cp` (eye)
+`/measured_cp` (eye)
 
 To override these with your own topics:
 
