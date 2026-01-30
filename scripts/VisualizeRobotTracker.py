@@ -41,7 +41,7 @@ class Robot:
             inputEndo2Marker: optionally specify a 4x4 calibration matrix from
                 tool tip to the marker. Defaults to the identity matrix.
             inputCTPose: optionally specify a 4x4 matrix defining the pose 
-                of the CT mesh
+                of the CT mesh relative to anatomy marker (ct2anatomy)
             inputMeshPath: optionally provide a path to a CT scan mesh.
                 Defaults to the example mesh.
             inputMeshOpacity: optionally provide an opacity value from 
@@ -197,18 +197,18 @@ class Robot:
     def setupCTMesh(self) -> None:
         '''
         Helper function to read in the CT scan mesh from file path, 
-        add to plotter, set transparency, and apply the given pose (self.CTPose)
+        add to plotter, set transparency, and scale from mm to m
         '''
     
         raw_mesh = pv.read(self.meshPath)
-        self.CTMesh = raw_mesh.decimate(0.5) # decimate mesh since CT scans have massive poly count
-        self.CTMeshActor = self.plotter.add_mesh(self.CTMesh, color='pink', opacity=self.opacity)
-        # apply pose to CT mesh. bTct = (given)
-        self.CTMesh.points = self.applyHomogeneousTransform(
-            self.CTMesh.points.copy(), self.CTPose)
+
+        # target up to 200,000 vertices
+        # numVert * x = 200,000
+        # x = 200,000/numVert
+        # if x is <= 1 then use, otherwise leave alone (mesh is small enough)
+        self.CTMesh = raw_mesh.decimate(0.95) # decimate mesh since CT scans have massive poly count
+        self.CTMeshActor = self.plotter.add_mesh(self.CTMesh, color='pink', opacity=float(self.opacity))
         self.CTMesh.scale(.001, inplace=True) # scale to correct size
-
-
 
     def draw(self) -> None:
         '''
@@ -270,6 +270,10 @@ class Robot:
                                     @ self.poseToHomogeneous(self.anatPose))
             self.anatMesh.points = self.applyHomogeneousTransform(
                 self.arrowMeshSave.points.copy(), self.anatMarker2base)
+            
+            # CT mesh: apply ct2base = amTct bTam (calculated above)
+            self.ct2base = (self.CTPose @ self.anatMarker2base)
+            self.CTMeshActor.user_matrix = self.ct2base
 
         self.plotter.update() # update the display
         
