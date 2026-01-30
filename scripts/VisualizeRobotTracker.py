@@ -209,7 +209,7 @@ class Robot:
         maxVert = 100000.0
         numVert = raw_mesh.n_points
         decFactor = 1.0 - (maxVert/numVert)
-        print(f"Vertex Count: {decFactor}")
+ 
         if decFactor < 1:        # only decimate if needed (more than maxVert verts)
             self.CTMesh = raw_mesh.decimate(decFactor)
         
