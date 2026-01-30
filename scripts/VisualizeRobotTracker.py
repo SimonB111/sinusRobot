@@ -255,21 +255,18 @@ class Robot:
             self.gripper2base = self.poseToHomogeneous(self.gripperPose)
             self.endoscope2base = (self.gripper2base @ self.marker2gripper 
                                    @ self.endoscope2marker)
-            self.endoMesh.points = self.applyHomogeneousTransform(
-                self.arrowMeshSave.points.copy(), self.endoscope2base)
-            
+            self.endoActor.user_matrix = self.endoscope2base
+         
             # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
             self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
             self.tracker2base = (self.gripper2base @ self.marker2gripper 
                                  @ self.inverse(self.marker2tracker))
-            self.trackerMesh.points = self.applyHomogeneousTransform(
-                self.arrowMeshSave.points.copy(), self.tracker2base)
-            
+            self.trackerActor.user_matrix = self.tracker2base
+
             # NDI Anatomy: apply bTam = bTT TTam
             self.anatMarker2base = (self.tracker2base 
                                     @ self.poseToHomogeneous(self.anatPose))
-            self.anatMesh.points = self.applyHomogeneousTransform(
-                self.arrowMeshSave.points.copy(), self.anatMarker2base)
+            self.anatActor.user_matrix = self.anatMarker2base
             
             # CT mesh: apply ct2base = amTct bTam (calculated above)
             self.ct2base = (self.CTPose @ self.anatMarker2base)
