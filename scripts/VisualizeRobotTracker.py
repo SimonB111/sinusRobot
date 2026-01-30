@@ -197,18 +197,24 @@ class Robot:
     def setupCTMesh(self) -> None:
         '''
         Helper function to read in the CT scan mesh from file path, 
-        add to plotter, set transparency, and scale from mm to m
+        add to plotter, set transparency, automatically decimate, 
+        and scale from mm to m.
         '''
     
         raw_mesh = pv.read(self.meshPath)
 
-        # target up to 200,000 vertices
-        # numVert * x = 200,000
-        # x = 200,000/numVert
-        # if x is <= 1 then use, otherwise leave alone (mesh is small enough)
-        self.CTMesh = raw_mesh.decimate(0.95) # decimate mesh since CT scans have massive poly count
+        # allow up to maxVert vertices for performance
+        # numVert * decFactor = maxVert
+        # decFactor = 1 - (maxVert/numVert)
+        maxVert = 100000.0
+        numVert = raw_mesh.n_points
+        decFactor = 1.0 - (maxVert/numVert)
+        print(f"Vertex Count: {decFactor}")
+        if decFactor < 1:        # only decimate if needed (more than maxVert verts)
+            self.CTMesh = raw_mesh.decimate(decFactor)
+        
         self.CTMeshActor = self.plotter.add_mesh(self.CTMesh, color='pink', opacity=float(self.opacity))
-        self.CTMesh.scale(.001, inplace=True) # scale to correct size
+        self.CTMesh.scale(.001, inplace=True) # scale from mm to m
 
     def draw(self) -> None:
         '''
