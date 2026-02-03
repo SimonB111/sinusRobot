@@ -59,6 +59,13 @@ class Robot:
         # optionally given CT pose
         self.CTPose = inputCTPose
 
+        self.lps2ras = np.array([
+            [ -1, 0,  0,  0],
+            [ 0, -1,  0,  0],
+            [ 0,  0,  1,  0],
+            [ 0,  0,  0,  1]
+        ])
+
         self.opacity = inputMeshOpacity
         
         self.meshPath = inputMeshPath
@@ -113,7 +120,7 @@ class Robot:
         timer = QTimer()
         # schedule task without blocking UI
         timer.timeout.connect(self.update)
-        timer.start(65) # ~15Hz (too fast refresh freezes sooner)
+        timer.start(65) # ~15Hz (too fast refresh may freeze sooner)
         self.plotter.app.exec_()
 
     def poseToHomogeneous(self, poseIn: PoseStamped) -> np.array:
@@ -226,7 +233,7 @@ class Robot:
             # create mesh once
             cubeX = pv.Cube(center=(.01,0,0), x_length=.02, y_length=0.005, z_length=0.005)
             cubeY = pv.Cube(center=(0,.01,0), x_length=0.005, y_length=.02, z_length=0.005)
-            cubeZ = pv.Cube(center=(0,0,.01), x_length=0.005, y_length=0.005, z_length=.02)
+            cubeZ = pv.Cube(center=(0,0,.01), x_length=0.005, y_length=0.005, z_length=.3)
             self.effectorMesh = pv.merge([cubeX, cubeY, cubeZ])
 
             # copy meshes and assign to actor for each pose we visualize
@@ -275,7 +282,7 @@ class Robot:
             self.anatActor.user_matrix = self.anatMarker2base
             
             # CT mesh: apply ct2base = amTct bTam (calculated above)
-            self.ct2base = (self.CTPose @ self.anatMarker2base)
+            self.ct2base = (self.CTPose @ self.anatMarker2base @ self.lps2ras)
             self.CTMeshActor.user_matrix = self.ct2base
 
         self.plotter.update() # update the display
