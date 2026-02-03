@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
     # Purpose: robot-tracker calibration
 
+    # Notes: for optimal calibration, include a wide variety of poses
+
     # Usage:
     # CalibrateRobotTracker.py <output_path> 
         # --custom_topics <hand_topic> <eye_topic> 
