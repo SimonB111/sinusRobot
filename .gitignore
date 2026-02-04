@@ -9,5 +9,8 @@ ros_files(GOOD).code-workspace
 src/ros_files/.venv/
 src/ros_files/.vscode/
 src/ros_files/output/marker2gripper.txt
-*.txt
+# *.txt
 *.xml
+
+*.egg-info/
+*.stl

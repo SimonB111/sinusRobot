@@ -60,10 +60,10 @@ class Robot:
         self.CTPose = inputCTPose
 
         self.lps2ras = np.array([
-            [ -1, 0,  0,  0],
-            [ 0, -1,  0,  0],
-            [ 0,  0,  1,  0],
-            [ 0,  0,  0,  1]
+            [ -1.0, 0.0, 0.0, 0.0],
+            [ 0.0, -1.0, 0.0, 0.0],
+            [ 0.0, 0.0, 1.0, 0.0],
+            [ 0.0, 0.0, 0.0, 1.0]
         ])
 
         self.opacity = inputMeshOpacity
@@ -281,8 +281,8 @@ class Robot:
                                     @ self.poseToHomogeneous(self.anatPose))
             self.anatActor.user_matrix = self.anatMarker2base
             
-            # CT mesh: apply ct2base = amTct bTam (calculated above)
-            self.ct2base = (self.CTPose @ self.anatMarker2base @ self.lps2ras)
+            # CT mesh: apply bTct = bTam amTct(calculated above)
+            self.ct2base = (self.anatMarker2base @ self.lps2ras @self.CTPose @ self.inverse(self.lps2ras))
             self.CTMeshActor.user_matrix = self.ct2base
 
         self.plotter.update() # update the display
