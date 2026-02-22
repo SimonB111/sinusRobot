@@ -114,8 +114,8 @@ class Robot:
         # initialize node and subscribe to appropriate topics
         rospy.init_node('listeners', anonymous=True)
         rospy.Subscriber("/REMS/Research/measured_cp", PoseStamped, self.gripperCallback)
-        rospy.Subscriber("/NDI/Endoscope/measured_cp", PoseStamped, self.endoCallback)
-        rospy.Subscriber("/NDI/Anatomy/measured_cp", PoseStamped, self.anatCallback)
+        rospy.Subscriber("/atracsys/Endoscope/measured_cp", PoseStamped, self.endoCallback)
+        rospy.Subscriber("/atracsys/Anatomy/measured_cp", PoseStamped, self.anatCallback)
 
         timer = QTimer()
         # schedule task without blocking UI
@@ -258,8 +258,9 @@ class Robot:
             
             self.plotter.show_axes() # only need to call once
         else :
-            # directly apply pose transformation for gripper
+            # Gripper: apply bTg
             self.effectorMesh.points = self.transformAxes(self.gripperPose)
+            #self.gripperActor.user_matrix = self.poseToHomogeneous(self.gripperPose)
             if not self.setCamera: # During first draw, focus camera on EE mesh
                 self.plotter.reset_camera(bounds=self.effectorMesh.bounds)
                 self.setCamera = True
@@ -272,17 +273,19 @@ class Robot:
          
             # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
             self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
-            self.tracker2base = (self.gripper2base @ self.marker2gripper 
+            self.tracker2base = (self.gripper2base @ self.marker2gripper
                                  @ self.inverse(self.marker2tracker))
             self.trackerActor.user_matrix = self.tracker2base
 
+            print(self.tracker2base)
+     
             # NDI Anatomy: apply bTam = bTT TTam
             self.anatMarker2base = (self.tracker2base 
                                     @ self.poseToHomogeneous(self.anatPose))
             self.anatActor.user_matrix = self.anatMarker2base
             
-            # CT mesh: apply bTct = bTam amTct(calculated above)
-            self.ct2base = (self.anatMarker2base @ self.lps2ras @self.CTPose @ self.inverse(self.lps2ras))
+            # CT mesh: apply bTct = bTam amTct (calculated above)
+            self.ct2base = (self.anatMarker2base @ self.lps2ras @ self.CTPose @ self.inverse(self.lps2ras))
             self.CTMeshActor.user_matrix = self.ct2base
 
         self.plotter.update() # update the display
