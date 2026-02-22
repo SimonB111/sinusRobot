@@ -51,6 +51,10 @@ class CalibrateRobotTracker:
         self.distThreshold = 0.0059 # move at least this much (meters) to trigger collection
         self.startedMoving = False  
         self.lastPos = None
+
+        # a step size less than 2 may result in samples taken too close together
+        # in time, leading to innacurate calibration
+        self.stepSize = 2
         
         self.startedMoving = False  
         self.forceCalibrate = False
@@ -180,16 +184,16 @@ class CalibrateRobotTracker:
 
             # hand is newer than eye, catch eye up
             if diff > self.tolerance:
-                eI += 1
+                eI += self.stepSize
             # eye data is newer, catch hand up
             elif diff < -self.tolerance:
-                hI += 1
+                hI += self.stepSize
             # within tolerance, match found
             else:
                 self.collectHandEye(handPoses[hI], eyePoses[eI])
                 # advance both to avoid using same data more than once
-                hI += 1
-                eI += 1
+                hI += self.stepSize
+                eI += self.stepSize
 
         # check if we ran out of bag data and didn't get max samples
         if not self.handEyeIsCalibrated:
