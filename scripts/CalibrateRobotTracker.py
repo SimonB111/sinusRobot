@@ -6,12 +6,14 @@
     # Usage:
     # CalibrateRobotTracker.py <output_path> 
         # --custom_topics <hand_topic> <eye_topic> 
-        # --from_bag <bag_path>  
+        # --from_bag <bag_path> 
+        # --max_samples <number_of_samples_to_collect> 
 
     # Arguments:
     # output_path: required, file path for the output marker2gripper matrix
     # --custom_topics <hand_topic> <eye_topic>: hand/eye rostopic paths
     # --from_bag: file path to the .bag to extract calibration data from (will not run nodes for live calibration)
+    # --max_samples: positive integer, the number of samples to collect and use in calibration
 
     # Output:
     # <output_path>: 4x4 homogeneous marker2gripper matrix, flattened, delimited by spaces
@@ -30,7 +32,7 @@ class CalibrateRobotTracker:
     Class to collect data then calibrate handeye matrix
     '''
 
-    def __init__(self, outputPath: str, targetTopics) -> None:
+    def __init__(self, outputPath: str, targetTopics, maxSamples = 400) -> None:
         '''
         Creates a CalibrateRobotTracker object
         Parameters:
@@ -41,7 +43,7 @@ class CalibrateRobotTracker:
 
         self.handEyeIsCalibrated = False
         self.sampleCount = 0
-        self.maxSamples = 150
+        self.maxSamples = int(maxSamples)
 
         # track when meaningful movement starts to avoid near-static data
         # low pose-diversity will cause innacurate calibration
@@ -63,7 +65,7 @@ class CalibrateRobotTracker:
         
     def gripperCallback(self, poseIn: PoseStamped) -> None:
         '''
-        Invoked when receiving data from /REMS/Research/measured_cp,
+        Invoked when recieving gripper pose (such as from /REMS/Research/measured_cp),
         updates corresponding pose.
         Returns: None
         '''
@@ -123,7 +125,7 @@ class CalibrateRobotTracker:
             self.lastPos = pos # get initial pos
         elif topic == self.targetTopics[0]:
             # find distance traveled in space by hand
-            dist = np.sqrt(  (pos.x - self.lastPos.x)**2 
+            dist = np.sqrt(   (pos.x - self.lastPos.x)**2 
                             + (pos.y - self.lastPos.y)**2 
                             + (pos.z - self.lastPos.z)**2 )
             if dist > self.distThreshold:
@@ -143,7 +145,13 @@ class CalibrateRobotTracker:
         eyePoses = []
         usedPoses = 0
         with rosbag.Bag(bagPath, 'r') as bag:
-            for topic, msg, t in bag.read_messages(topics=self.targetTopics):
+
+            # DEBUG start later in file
+            startTime = rospy.Time.from_sec(bag.get_start_time())
+            skipTime = startTime + rospy.Duration(10) # our new offset start time
+
+
+            for topic, msg, t in bag.read_messages(topics=self.targetTopics, start_time=skipTime):
                 pos = msg.pose.position
 
                 # check for meaningful movement from hand before collecting data
@@ -168,28 +176,33 @@ class CalibrateRobotTracker:
         while not self.handEyeIsCalibrated and hI < len(handPoses) and eI < len(eyePoses):
             handTime = handPoses[hI].header.stamp.to_sec()
             eyeTime = eyePoses[eI].header.stamp.to_sec()
-            diff = abs(handTime - eyeTime)
+            diff = handTime - eyeTime
 
-            # if we hit a final iteration without calibration,
-            # then force calibration with existing data
-            if hI == len(handPoses)-1 or eI == len(eyePoses)-1:
-                self.forceCalibrate = True
-                print(f"forcing calibration, # of hand poses = {len(handPoses)}, hI = {hI}, eI = {eI}")
+            # hand is newer than eye, catch eye up
+            if diff > self.tolerance:
+                eI += 1
+            # eye data is newer, catch hand up
+            elif diff < -self.tolerance:
+                hI += 1
+            # within tolerance, match found
+            else:
                 self.collectHandEye(handPoses[hI], eyePoses[eI])
-                break
-
-            # found good match
-            elif diff < self.tolerance:
-                self.collectHandEye(handPoses[hI], eyePoses[eI])
-                # advance both to look for a new pair OPTIONAL
+                # advance both to avoid using same data more than once
                 hI += 1
                 eI += 1
-                continue
 
-            if handTime < eyeTime:
-                hI += 1 # incrementing hand first since its faster refresh
-            elif eyeTime < handTime:
-                eI += 1
+        # check if we ran out of bag data and didn't get max samples
+        if not self.handEyeIsCalibrated:
+            self.forceCalibrate = True
+            print(f"\n[!] Forcing calibration: Ran out of messages in bag.")
+            print(f"Details: Hand poses: {len(handPoses)}, Eye poses: {len(eyePoses)}")
+            print(f"Final Indices: hI={hI}, eI={eI} | Samples collected: {self.sampleCount}")
+            
+            # use the last valid indices available to trigger the solver
+            last_h = min(hI, len(handPoses) - 1)
+            last_e = min(eI, len(eyePoses) - 1)
+            self.collectHandEye(handPoses[last_h], eyePoses[last_e])
+    
 
     def collectHandEye(self, gripperPose: PoseStamped, markerPose: PoseStamped):
         '''
@@ -223,6 +236,13 @@ class CalibrateRobotTracker:
             
             self.sampleCount += 1 # move to next position
         else: # call calibrate when we have all samples
+
+            print("\n" + "="*30)
+            print(f"DEBUG: Calibration Data Shapes")
+            print(f"rHand: {self.tHand.shape}")
+            print(f"rEye:   {self.tEye.shape}")
+            print("-" * 30)
+
             rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
                 self.rHand, self.tHand, self.rEye, self.tEye, cv2.CALIB_HAND_EYE_PARK)
             
@@ -249,24 +269,35 @@ if __name__ == '__main__':
     parser.add_argument("--from_bag", 
                         help="Provide path to a .bag file containing appropriate topics. " \
                         "If no path is provided, the program will run a listener node for the topics")
+    parser.add_argument("--max_samples", 
+                        help="provide the max number of samples to calibrate with, " \
+                        "defaults to 400. Higher values will result in long computation time")
+    
     args = parser.parse_args()
 
     currentTargetTopics = ["/REMS/Research/measured_cp", 
-                           "/NDI/Endoscope/measured_cp"]
+                           "/atracsys/Endoscope/measured_cp"]
     # if we were given custom topics
     if args.custom_topics:
         currentTargetTopics = args.custom_topics
 
     args.output_path.parent.mkdir(parents=True, exist_ok=True)
     
+    if args.max_samples:
+        maxSamples = args.max_samples
+    else:
+        maxSamples = 400 # default max samples 
+
     # if we were given an input .bag file
     if args.from_bag:
         # extract data from .bag instead of running listeners
         calibrateSinusRobot = CalibrateRobotTracker(args.output_path, 
-                                                    currentTargetTopics)
+                                                    currentTargetTopics,
+                                                    maxSamples)
         calibrateSinusRobot.extractData(args.from_bag)
     else:
         # listen for topics if path to .bag was not provided
         calibrateSinusRobot = CalibrateRobotTracker(args.output_path,
-                                                    currentTargetTopics)
+                                                    currentTargetTopics,
+                                                    maxSamples)
         calibrateSinusRobot.runListeners()
