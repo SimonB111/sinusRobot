@@ -2,11 +2,12 @@
     # Purpose: robot-tracker visualization
 
     # Usage:
-    # VisualizeRobotTracker.py <marker2gripper_matrix> 
+    # VisualizeRobotTracker.py <marker2gripper_matrix>
         # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>
 
     # Arguments:
     # marker2gripper_matrix: required, file path to the marker2gripper matrix, formatted as flattened 4x4 homogeneous transformation, space delimited
+    # --custom_topics <gripper_topic> <gripper_marker_topic> <anatomy_marker_topic>
     # --endoscope2marker_matrix <path_to_endoscope2marker_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
     # --CT_pose <path_to_CT_pose_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
     # --CT_mesh <path_to_CT_mesh>, optional, path to a valid mesh file
@@ -15,6 +16,7 @@
     # Output:
     # live 3D visualization of gripper (red), marker/tool tip (green), 
     # tracker (blue), and anatomy (brown) poses, in addition to CT mesh
+
 import rospy
 import pyvista as pv
 pv.global_theme.multi_samples = 0 # no anti aliasing to drop rendering load
@@ -28,7 +30,8 @@ import argparse
 class Robot:
     '''Class representing a robot'''
 
-    def __init__(self, inputMarker2Gripper: np.array, 
+    def __init__(self, targetTopics,
+                 inputMarker2Gripper: np.array, 
                  inputEndo2Marker: np.array = np.eye(4),
                  inputCTPose: np.array = np.eye(4), 
                  inputMeshPath: str = '../example/Segmentation_Bone.stl',
@@ -36,6 +39,9 @@ class Robot:
         '''
         Creates a Robot object
         Parameters:
+            targetTopics:
+                the 3 topics we need to run visualization:
+                gripper, gripper's marker, anatomy marker
             inputMarker2Gripper: required, the homogeneous transformation from 
                 the marker to the gripper
             inputEndo2Marker: optionally specify a 4x4 calibration matrix from
@@ -47,6 +53,11 @@ class Robot:
             inputMeshOpacity: optionally provide an opacity value from 
                 0.0 (transparent) to 1.0 (solid). Defaults to 0.5.
         '''
+
+        self.gripperTopic = targetTopics[0]
+        self.endoMarkerTopic = targetTopics[1]
+        self.anatMarkerTopic = targetTopics[2]
+
         self.gripperPose = None
         self.endoMarkerPose = None
         self.anatPose = None
@@ -276,8 +287,6 @@ class Robot:
             self.tracker2base = (self.gripper2base @ self.marker2gripper
                                  @ self.inverse(self.marker2tracker))
             self.trackerActor.user_matrix = self.tracker2base
-
-            print(self.tracker2base)
      
             # NDI Anatomy: apply bTam = bTT TTam
             self.anatMarker2base = (self.tracker2base 
@@ -297,6 +306,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("marker2gripper_matrix", help="required, path to .txt file" \
         "containing space delimited 4x4 marker2gripper transformation matrix")
+    parser.add_argument("--custom_topics", 
+                        help="provide these 3 ros topics in the following order: " \
+                        "<gripper_topic> <gripper_marker_topic> <anatomy_marker_topic> " \
+                        "(recommended but optional, defaults to " \
+                        "/REMS/Research/measured_cp, /atracsys/Endoscope/measured_cp, /atracsys/Anatomy/measured_cp)",
+                        nargs=3, type=str)
     parser.add_argument("--endoscope2marker_matrix", 
                         help="provide path to .txt file containing space " \
                         "delimited 4x4 endoscope2marker transformation matrix (optional)")
@@ -317,6 +332,13 @@ if __name__ == '__main__':
         inputEndo2Marker = rawEndo2Marker.reshape(4, 4)
     else:
         inputEndo2Marker = np.eye(4) # default to identity matrix
+
+    currentTargetTopics = ["/REMS/Research/measured_cp", 
+                           "/atracsys/Endoscope/measured_cp",
+                           "/atracsys/Anatomy_measured_cp"]
+    # if we were given custom topics
+    if args.custom_topics:
+        currentTargetTopics = args.custom_topics
 
     if args.CT_pose: # handle optional CT pose input
         rawCTPose = np.loadtxt(args.CT_pose)
@@ -339,5 +361,6 @@ if __name__ == '__main__':
     inputMarker2Gripper = rawMarker2Gripper.reshape(4, 4)
 
     # run nodes and visualization
-    sinusRobot = Robot(inputMarker2Gripper, inputEndo2Marker, inputCTPose, inputMeshPath, meshOpacity)
+    sinusRobot = Robot(currentTargetTopics, inputMarker2Gripper, inputEndo2Marker, 
+                       inputCTPose, inputMeshPath, meshOpacity)
     sinusRobot.runListeners()
