@@ -18,73 +18,40 @@ python3 CalibrateRobotTracker.py <output_path>
 
 - `output_path` (required): Path to the output `.txt` file where calibration results will be saved.
 
-### Using custom topics
+### Options
 
-By default, the script listens to:
-
-- `/REMS/Research/measured_cp` (hand)
-- `/NDI/Endoscope`
-
-`/measured_cp` (eye)
-
-To override these with your own topics:
-
-python3 CalibrateRobotTracker.py <output_path>
---custom_topics <hand_topic> <eye_topic>
+- `--custom_topics <hand_topic> <eye_topic>`: Override default topics (`/REMS/Research/measured_cp` for hand, `/atracsys/Endoscope/measured_cp` for eye).
+- `--from_bag <bag_path>`: Use data from a ROS bag file instead of live topics.
+- `--max_samples <number>`: Set maximum samples to collect (default: 400).
 
 **Example:**
 
-python3 CalibrateRobotTracker.py results/calibration.txt
---custom_topics /robot/hand_pose /tracker/eye_pose
-
-Each custom topic must publish `geometry_msgs/PoseStamped`.
-
-### Using a ROS bag file
-
-To run calibration on pre-recorded data from a `.bag` file:
-
-python3 CalibrateRobotTracker.py <output_path>
---from_bag <bag_path>
-
-**Example:**
-
-python3 CalibrateRobotTracker.py results/calibration.txt
---from_bag data/session1.bag
-
-You can combine this with custom topics:
-
-python3 CalibrateRobotTracker.py results/calibration.txt
---custom_topics /robot/hand_pose /tracker/eye_pose
---from_bag data/session1.bag
-
-If `--from_bag` is not provided, the script runs ROS listener nodes and waits for live messages on the specified topics.
-
-Note: extractData() attempts to wait for meaningful movement, effectively skipping the first part of a bag file when the robot may be still. However, in some cases the tolerance may need to be adjusted, especially for non-surgical systems where the magnitude is much greater.
+python3 CalibrateRobotTracker.py results/calibration.txt --from_bag data/session1.bag --max_samples 500
 
 ## VisualizeRobotTracker
 
 Command-line tool to visualize robot poses and transformations using PyVista 3D rendering and ROS `PoseStamped` topics.
-     
+
 <img width="541" height="322" alt="visualizeRobotFigure_surgicalScale_labeled" src="https://github.com/user-attachments/assets/6f5e0569-1946-44f6-ae92-91403ae5743d" />
-     (2cm surgical scale axes)
+(2cm surgical scale axes)
 
 ### Basic usage
 
-python3 RobotVisualizer.py <marker2gripper_matrix>
+python3 VisualizeRobotTracker.py <marker2gripper_matrix>
 
 - `marker2gripper_matrix` (required): Path to `.txt` file with space-delimited 4x4 transformation matrix (marker → gripper).
 
-### Optional endoscope transformation
+### Options
 
-Provide endoscope-to-marker transformation (defaults to identity matrix):
-
-python3 RobotVisualizer.py <marker2gripper_matrix>
---endoscope2marker_matrix <endoscope2marker_matrix>
+- `--custom_topics <gripper_topic> <gripper_marker_topic> <anatomy_marker_topic>`: Override default topics.
+- `--endoscope2marker_matrix <path>`: Path to endoscope-to-marker transformation matrix (optional).
+- `--CT_pose <path>`: Path to CT scan pose matrix (optional).
+- `--CT_mesh <path>`: Path to CT mesh file (optional, defaults to `../example/Segmentation_Bone.stl`).
+- `--mesh_opacity <float>`: Opacity value (0.0-1.0, default: 0.5).
 
 **Example:**
 
-python3 RobotVisualizer.py transforms/marker2gripper.txt
---endoscope2marker_matrix transforms/endo2marker.txt
+python3 VisualizeRobotTracker.py transforms/marker2gripper.txt --CT_mesh model.stl --mesh_opacity 0.7
 
 ### Input file format
 
