@@ -54,7 +54,7 @@ class CalibrateRobotTracker:
 
         # a step size less than 2 may result in samples taken too close together
         # in time, leading to innacurate calibration
-        self.stepSize = 2
+        self.stepSize = 2 # (experimental parameter)
         
         self.startedMoving = False  
         self.forceCalibrate = False
@@ -77,7 +77,7 @@ class CalibrateRobotTracker:
 
     def endoCallback(self, poseIn: PoseStamped) -> None:
         '''
-        Invoked when receiving data from NDI/Endoscope/measured_cp,
+        Invoked when receiving marker pose (such as from NDI/Endoscope/measured_cp),
         updates corresponding pose. Runs collectCalibData if not calibrated yet
         Returns: None
         '''
@@ -172,7 +172,7 @@ class CalibrateRobotTracker:
 
                 # place limit to prevent excessive time and space usage
                 # for large .bag files
-                if usedPoses > self.maxSamples*200:
+                if usedPoses > self.maxSamples*400:
                     break
         
         hI = 0 # hand index
@@ -191,7 +191,8 @@ class CalibrateRobotTracker:
             # within tolerance, match found
             else:
                 self.collectHandEye(handPoses[hI], eyePoses[eI])
-                # advance both to avoid using same data more than once
+                # advance both every time we collect data 
+                # to avoid using same data more than once
                 hI += self.stepSize
                 eI += self.stepSize
 
@@ -275,7 +276,7 @@ if __name__ == '__main__':
                         "If no path is provided, the program will run a listener node for the topics")
     parser.add_argument("--max_samples", 
                         help="provide the max number of samples to calibrate with, " \
-                        "defaults to 400. Higher values will result in long computation time")
+                        "defaults to 400. Higher values result in long computation time")
     
     args = parser.parse_args()
 
