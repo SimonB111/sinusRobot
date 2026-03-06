@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-    # Purpose: robot-tracker calibration
+# Purpose: robot-tracker calibration
 
-    # Notes: for optimal calibration, include a wide variety of poses
+# Notes: for best calibration, include a wide variety of poses
 
-    # Usage:
-    # CalibrateRobotTracker.py <output_path> 
-        # --custom_topics <hand_topic> <eye_topic> 
-        # --from_bag <bag_path> 
-        # --max_samples <number_of_samples_to_collect> 
+# Usage:
+# CalibrateRobotTracker.py <output_path>
+# --custom_topics <hand_topic> <eye_topic>
+# --from_bag <bag_path>
+# --max_samples <number_of_samples_to_collect>
 
-    # Arguments:
-    # output_path: required, file path for the output marker2gripper matrix
-    # --custom_topics <hand_topic> <eye_topic>: hand/eye rostopic paths
-    # --from_bag: file path to the .bag to extract calibration data from (will not run nodes for live calibration)
-    # --max_samples: positive integer, the number of samples to collect and use in calibration
+# Arguments:
+# output_path: required, file path for the output marker2gripper matrix
+# --custom_topics <hand_topic> <eye_topic>: hand/eye rostopic paths
+# --from_bag: file path to the .bag to extract calibration data from (will not run nodes for live calibration)
+# --max_samples: positive integer, the number of samples to collect and use in calibration
 
-    # Output:
-    # <output_path>: 4x4 homogeneous marker2gripper matrix, flattened, delimited by spaces
+# Output:
+# <output_path>: 4x4 homogeneous marker2gripper matrix, flattened, delimited by spaces
 
 import rospy
 import rosbag
@@ -27,18 +27,19 @@ from scipy.spatial.transform import Rotation as Rot
 from geometry_msgs.msg import PoseStamped
 import argparse
 
-class CalibrateRobotTracker:
-    '''
-    Class to collect data then calibrate handeye matrix
-    '''
 
-    def __init__(self, outputPath: str, targetTopics, maxSamples = 400) -> None:
-        '''
+class CalibrateRobotTracker:
+    """
+    Class to collect data then calibrate handeye matrix
+    """
+
+    def __init__(self, outputPath: str, targetTopics, maxSamples=400) -> None:
+        """
         Creates a CalibrateRobotTracker object
         Parameters:
             outputPath: string, the path to the output txt file
             targetTopics: list of two strings, format: ["/hand/path", "/eye/path"]
-        '''
+        """
         self.outputPath = outputPath
 
         self.handEyeIsCalibrated = False
@@ -47,66 +48,70 @@ class CalibrateRobotTracker:
 
         # track when meaningful movement starts to avoid near-static data
         # low pose-diversity will cause innacurate calibration
-        self.tolerance = 0.06 # in seconds
-        self.distThreshold = 0.0059 # move at least this much (meters) to trigger collection
-        self.startedMoving = False  
+        self.tolerance = 0.06  # in seconds
+        self.distThreshold = (
+            0.0059  # move at least this much (meters) to trigger collection
+        )
+        self.startedMoving = False
         self.lastPos = None
 
         # a step size less than 2 may result in samples taken too close together
         # in time, leading to innacurate calibration
-        self.stepSize = 2 # (experimental parameter)
-        
-        self.startedMoving = False  
+        self.stepSize = 2  # (experimental parameter)
+
+        self.startedMoving = False
         self.forceCalibrate = False
         self.targetTopics = targetTopics
         # allocate arrays with appropriate shape
-        self.tHand = np.zeros((self.maxSamples, 3)) 
+        self.tHand = np.zeros((self.maxSamples, 3))
         self.tEye = np.zeros((self.maxSamples, 3))
         self.rHand = np.zeros((self.maxSamples, 3, 3))
         self.rEye = np.zeros((self.maxSamples, 3, 3))
         # to be filled by calibrate function
-        self.marker2gripper = np.eye(4) 
-        
+        self.marker2gripper = np.eye(4)
+
     def gripperCallback(self, poseIn: PoseStamped) -> None:
-        '''
+        """
         Invoked when recieving gripper pose (such as from /REMS/Research/measured_cp),
         updates corresponding pose.
         Returns: None
-        '''
+        """
         self.gripperPose = poseIn
 
     def endoCallback(self, poseIn: PoseStamped) -> None:
-        '''
+        """
         Invoked when receiving marker pose (such as from NDI/Endoscope/measured_cp),
         updates corresponding pose. Runs collectCalibData if not calibrated yet
         Returns: None
-        '''
+        """
         self.endoMarkerPose = poseIn
         if not self.handEyeIsCalibrated:
             self.collectCalibData()
-    
+
     def collectCalibData(self) -> None:
-        '''
+        """
         Collects calibration data if pair is within time difference tolerance
 
-        '''
+        """
         # measure the difference in times
         # collect that data pair if time difference within our tolerance
         gripperTime = self.gripperPose.header.stamp.to_sec()
         endoMarkerTime = self.endoMarkerPose.header.stamp.to_sec()
         diff = abs(gripperTime - endoMarkerTime)
         if diff < self.tolerance:
-            print(f"{self.sampleCount} of {self.maxSamples} samples, time diff = {diff}")
+            print(
+                f"{self.sampleCount} of {self.maxSamples} samples, time diff = {diff}"
+            )
             self.collectHandEye(self.gripperPose, self.endoMarkerPose)
 
     def runListeners(self) -> None:
-        '''
+        """
         Creates nodes that listen to needed topics,
         loops continuously
         Returns: None
-        '''
+        """
         # initialize node and subscribe to appropriate topics
-        rospy.init_node('listeners', anonymous=True)
+        rospy.init_node("listeners", anonymous=True)
         rospy.Subscriber(self.targetTopics[0], PoseStamped, self.gripperCallback)
         rospy.Subscriber(self.targetTopics[1], PoseStamped, self.endoCallback)
         # stay running
@@ -118,48 +123,45 @@ class CalibrateRobotTracker:
             rate.sleep()
 
     def detectMotion(self, topic, pos) -> None:
-        '''
+        """
         Helper function to check for meaningful movement since last pose
         Parameters:
             topic: topic of the current message
             pos: position part of PoseStamped of current position
-        '''
+        """
         # detect meaningful movement from hand before collecting data
         if topic == self.targetTopics[0] and self.lastPos == None:
-            self.lastPos = pos # get initial pos
+            self.lastPos = pos  # get initial pos
         elif topic == self.targetTopics[0]:
             # find distance traveled in space by hand
-            dist = np.sqrt(   (pos.x - self.lastPos.x)**2 
-                            + (pos.y - self.lastPos.y)**2 
-                            + (pos.z - self.lastPos.z)**2 )
+            dist = np.sqrt(
+                (pos.x - self.lastPos.x) ** 2
+                + (pos.y - self.lastPos.y) ** 2
+                + (pos.z - self.lastPos.z) ** 2
+            )
             if dist > self.distThreshold:
                 self.startedMoving = True
 
     def extractData(self, bagPath):
-        '''
+        """
         Calls collectHandEye with pairs of hand and eye data that are within the
         time tolerance limit until calibration is done, using data from the
-        provided .bag file. 
-        The function is designed to calculate marker2gripper, where the marker is 
+        provided .bag file.
+        The function is designed to calculate marker2gripper, where the marker is
         connected to the moving gripper, and the camera/tracker is stationary.
-        '''
-      
+        """
+
         # lists to store our extracted PoseStamped for hand and eye
         handPoses = []
         eyePoses = []
         usedPoses = 0
-        with rosbag.Bag(bagPath, 'r') as bag:
+        with rosbag.Bag(bagPath, "r") as bag:
 
-            # DEBUG start later in file
-            startTime = rospy.Time.from_sec(bag.get_start_time())
-            skipTime = startTime + rospy.Duration(10) # our new offset start time
-
-
-            for topic, msg, t in bag.read_messages(topics=self.targetTopics, start_time=skipTime):
+            for topic, msg, t in bag.read_messages(topics=self.targetTopics):
                 pos = msg.pose.position
 
                 # check for meaningful movement from hand before collecting data
-                if not self.startedMoving: 
+                if not self.startedMoving:
                     self.detectMotion(topic, pos)
 
                 # pack data into two lists
@@ -172,12 +174,14 @@ class CalibrateRobotTracker:
 
                 # place limit to prevent excessive time and space usage
                 # for large .bag files
-                if usedPoses > self.maxSamples*400:
+                if usedPoses > self.maxSamples * 400:
                     break
-        
-        hI = 0 # hand index
-        eI = 0 # eye index
-        while not self.handEyeIsCalibrated and hI < len(handPoses) and eI < len(eyePoses):
+
+        hI = 0  # hand index
+        eI = 0  # eye index
+        while (
+            not self.handEyeIsCalibrated and hI < len(handPoses) and eI < len(eyePoses)
+        ):
             handTime = handPoses[hI].header.stamp.to_sec()
             eyeTime = eyePoses[eI].header.stamp.to_sec()
             diff = handTime - eyeTime
@@ -191,7 +195,7 @@ class CalibrateRobotTracker:
             # within tolerance, match found
             else:
                 self.collectHandEye(handPoses[hI], eyePoses[eI])
-                # advance both every time we collect data 
+                # advance both every time we collect data
                 # to avoid using same data more than once
                 hI += self.stepSize
                 eI += self.stepSize
@@ -201,16 +205,17 @@ class CalibrateRobotTracker:
             self.forceCalibrate = True
             print(f"\n[!] Forcing calibration: Ran out of messages in bag.")
             print(f"Details: Hand poses: {len(handPoses)}, Eye poses: {len(eyePoses)}")
-            print(f"Final Indices: hI={hI}, eI={eI} | Samples collected: {self.sampleCount}")
-            
+            print(
+                f"Final Indices: hI={hI}, eI={eI} | Samples collected: {self.sampleCount}"
+            )
+
             # use the last valid indices available to trigger the solver
             last_h = min(hI, len(handPoses) - 1)
             last_e = min(eI, len(eyePoses) - 1)
             self.collectHandEye(handPoses[last_h], eyePoses[last_e])
-    
 
     def collectHandEye(self, gripperPose: PoseStamped, markerPose: PoseStamped):
-        '''
+        """
         Collects arrays full of translation vectors and
         rotation matrices for gripper2base and target2cam
         Calls calibrateHandEye() when full
@@ -218,7 +223,7 @@ class CalibrateRobotTracker:
         Parameters:
             gripperPose: PoseStamped, representing gripper2base
             markerPose: PoseStamped, representing target2cam (marker2NDI)
-        '''
+        """
         if self.sampleCount < self.maxSamples and not self.forceCalibrate:
             hPos = gripperPose.pose.position
             hOri = gripperPose.pose.orientation
@@ -230,7 +235,7 @@ class CalibrateRobotTracker:
             self.rHand[self.sampleCount] = hRot.as_matrix()
 
             eRot = Rot.from_quat((eOri.x, eOri.y, eOri.z, eOri.w))
-            invEyeRot = eRot.as_matrix().T # invert eye
+            invEyeRot = eRot.as_matrix().T  # invert eye
             self.rEye[self.sampleCount] = invEyeRot
 
             # fill current row with position vector
@@ -238,71 +243,81 @@ class CalibrateRobotTracker:
             # invert eye
             invEyeTranslation = invEyeRot @ -np.array([ePos.x, ePos.y, ePos.z])
             self.tEye[self.sampleCount, :] = invEyeTranslation
-            
-            self.sampleCount += 1 # move to next position
-        else: # call calibrate when we have all samples
 
-            print("\n" + "="*30)
-            print(f"DEBUG: Calibration Data Shapes")
-            print(f"rHand: {self.tHand.shape}")
-            print(f"rEye:   {self.tEye.shape}")
-            print("-" * 30)
+            self.sampleCount += 1  # move to next position
+        else:  # call calibrate when we have all samples
 
             rMarker2Gripper, tMarker2Gripper = cv2.calibrateHandEye(
-                self.rHand, self.tHand, self.rEye, self.tEye, cv2.CALIB_HAND_EYE_PARK)
-            
-            self.marker2gripper[:3, :3] = rMarker2Gripper # rotation part
-            self.marker2gripper[:3, 3] = tMarker2Gripper.flatten() # translation part
+                self.rHand, self.tHand, self.rEye, self.tEye, cv2.CALIB_HAND_EYE_PARK
+            )
+
+            self.marker2gripper[:3, :3] = rMarker2Gripper  # rotation part
+            self.marker2gripper[:3, 3] = tMarker2Gripper.flatten()  # translation part
 
             # write out as space separated numbers
-            with open(self.outputPath, 'w') as f:
-                f.write(' '.join(map(str, self.marker2gripper.flatten())))
+            with open(self.outputPath, "w") as f:
+                f.write(" ".join(map(str, self.marker2gripper.flatten())))
 
             print(self.marker2gripper)
             self.handEyeIsCalibrated = True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # setup parser
     parser = argparse.ArgumentParser()
     # output path is "soft required" since we have a default in place
-    parser.add_argument("output_path", nargs="?", default="../output/marker2gripper.txt", type=Path, help="Required, path for output marker2gripper matrix .txt")
-    parser.add_argument("--custom_topics", nargs=2, type=str,
-                        help="Provide paths to hand, then eye rostopic. Each" \
-                        "should post PoseStamped")
-    parser.add_argument("--from_bag", 
-                        help="Provide path to a .bag file containing appropriate topics. " \
-                        "If no path is provided, the program will run a listener node for the topics")
-    parser.add_argument("--max_samples", 
-                        help="provide the max number of samples to calibrate with, " \
-                        "defaults to 400. Higher values result in long computation time")
-    
+    parser.add_argument(
+        "output_path",
+        nargs="?",
+        default="../output/marker2gripper.txt",
+        type=Path,
+        help="Required, path for output marker2gripper matrix .txt",
+    )
+    parser.add_argument(
+        "--custom_topics",
+        nargs=2,
+        type=str,
+        help="Provide paths to hand, then eye rostopic. Each" "should post PoseStamped",
+    )
+    parser.add_argument(
+        "--from_bag",
+        help="Provide path to a .bag file containing appropriate topics. "
+        "If no path is provided, the program will run a listener node for the topics",
+    )
+    parser.add_argument(
+        "--max_samples",
+        help="provide the max number of samples to calibrate with, "
+        "defaults to 400. Higher values result in long computation time",
+    )
+
     args = parser.parse_args()
 
-    currentTargetTopics = ["/REMS/Research/measured_cp", 
-                           "/atracsys/Endoscope/measured_cp"]
+    currentTargetTopics = [
+        "/REMS/Research/measured_cp",
+        "/atracsys/Endoscope/measured_cp",
+    ]
     # if we were given custom topics
     if args.custom_topics:
         currentTargetTopics = args.custom_topics
 
     args.output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     if args.max_samples:
         maxSamples = args.max_samples
     else:
-        maxSamples = 400 # default max samples 
+        maxSamples = 400  # default max samples
 
     # if we were given an input .bag file
     if args.from_bag:
         # extract data from .bag instead of running listeners
-        calibrateSinusRobot = CalibrateRobotTracker(args.output_path, 
-                                                    currentTargetTopics,
-                                                    maxSamples)
+        calibrateSinusRobot = CalibrateRobotTracker(
+            args.output_path, currentTargetTopics, maxSamples
+        )
         calibrateSinusRobot.extractData(args.from_bag)
     else:
         # listen for topics if path to .bag was not provided
-        calibrateSinusRobot = CalibrateRobotTracker(args.output_path,
-                                                    currentTargetTopics,
-                                                    maxSamples)
+        calibrateSinusRobot = CalibrateRobotTracker(
+            args.output_path, currentTargetTopics, maxSamples
+        )
         calibrateSinusRobot.runListeners()
