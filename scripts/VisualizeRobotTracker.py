@@ -66,7 +66,6 @@ class Robot:
         self.gripperPose = None
         self.endoMarkerPose = None
         self.anatPose = None
-        self.setCamera = False
 
         # known transformation from the marker to the gripper
         self.marker2gripper = inputMarker2Gripper
@@ -252,6 +251,40 @@ class Robot:
         )
         self.CTMesh.scale(0.001, inplace=True)  # scale from mm to m
 
+    def setupCamera(self) -> None:
+        """
+        Helper function to set up the camera intrinsics
+        """
+        self.cam = self.plotter.camera
+        self.cam.view_angle = 70  # in degrees
+        self.cam.clipping_range = (0.001, 1.0) # in meters
+
+    def updateCamera(self, endoscope2base: np.array) -> None:
+        """
+        Helper function to update camera orientation.
+        Parameters:
+                endoscope2base: np.array, the homogeneous transformation 
+                supplying camera orientation relative to robot base frame
+        """
+ 
+        origin = endoscope2base[:3, 3]
+        forward_vector = endoscope2base[:3, 2]
+        up_vector = endoscope2base[:3, 1]
+
+        # setting camera manually
+        self.cam.position = origin
+        self.cam.focal_point = origin + forward_vector 
+        self.cam.up = up_vector
+
+        # (optional) add an arrow to visualize camera forward direction
+        arrow = pv.Arrow(
+            start=origin, 
+            direction=forward_vector, 
+            scale=0.5
+        )
+        self.plotter.add_mesh(arrow, color="red", name="camera_pointer", 
+                            reset_camera=False, opacity=0.2)
+        
     def draw(self) -> None:
         """
         Creates a basic 3D visualization of the position and orientation of
@@ -280,7 +313,7 @@ class Robot:
             self.plotter.add_mesh(self.baseMesh, color="black")
 
             self.endoMesh = self.effectorMesh.copy()
-            self.endoActor = self.plotter.add_mesh(self.endoMesh, color="green")
+            self.endoActor = self.plotter.add_mesh(self.endoMesh, color="green", opacity=.35)
 
             self.trackerMesh = self.effectorMesh.copy()
             self.trackerActor = self.plotter.add_mesh(self.trackerMesh, color="blue")
@@ -288,17 +321,15 @@ class Robot:
             self.anatMesh = self.effectorMesh.copy()
             self.anatActor = self.plotter.add_mesh(self.anatMesh, color="brown")
 
-            # setup CT mesh one time
-            self.setupCTMesh()
+            self.setupCTMesh() # setup CT mesh one time
+
+            self.setupCamera() # setup camera one time
 
             self.plotter.show_axes()  # only need to call once
         else:
             # Gripper: apply bTg
             self.effectorMesh.points = self.transformAxes(self.gripperPose)
             # self.gripperActor.user_matrix = self.poseToHomogeneous(self.gripperPose)
-            if not self.setCamera:  # During first draw, focus camera on EE mesh
-                self.plotter.reset_camera(bounds=self.effectorMesh.bounds)
-                self.setCamera = True
 
             # Endoscope Tip: apply bTe = bTg gTm mTe
             self.gripper2base = self.poseToHomogeneous(self.gripperPose)
@@ -306,6 +337,9 @@ class Robot:
                 self.gripper2base @ self.marker2gripper @ self.endoscope2marker
             )
             self.endoActor.user_matrix = self.endoscope2base
+
+            # Endoscope Camera: apply bTe (camera is at endoscope tip)
+            self.updateCamera(self.endoscope2base)
 
             # NDI Origin: apply bTT = bTg gTm mTT where (TTm)^-1= mTT
             self.marker2tracker = self.poseToHomogeneous(self.endoMarkerPose)
