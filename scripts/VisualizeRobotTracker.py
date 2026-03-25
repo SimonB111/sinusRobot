@@ -12,6 +12,8 @@
 # --CT_pose <path_to_CT_pose_matrix_txt>, optional, formatted as flattened 4x4 homogeneous transformation, space delimited
 # --CT_mesh <path_to_CT_mesh>, optional, path to a valid mesh file
 # --mesh_opacity <float 0.0 to 1.0>, optional, specify the level of transparency (1.0 = solid, 0.0 = invisible)
+# --camera_JSON <path_to_camera_JSON>, optional, path to .json file containing camera intrinsics and distortion coefficients in the OpenCV camera calibration format
+# --camera_height <int>, optional, specify the height of the endoscope camera in pixels (default=240)
 
 # Output:
 # live 3D visualization of gripper (red), marker/tool tip (green),
@@ -27,6 +29,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 from geometry_msgs.msg import PoseStamped
 import argparse
+import json
 
 
 class Robot:
@@ -40,6 +43,10 @@ class Robot:
         inputCTPose: np.array = np.eye(4),
         inputMeshPath: str = "../example/Segmentation_Bone.stl",
         inputMeshOpacity: float = 0.5,
+        height: int = 240,
+        K: np.array = None,
+        D: np.array = None,
+        P: np.array = None
     ) -> None:
         """
         Creates a Robot object
@@ -57,6 +64,11 @@ class Robot:
                 Defaults to the example mesh.
             inputMeshOpacity: optionally provide an opacity value from
                 0.0 (transparent) to 1.0 (solid). Defaults to 0.5.
+            height: optionally provide the height of the endoscope camera
+                    in pixels (defaults to 240)
+            K: optionally provide camera intrinsics matrix (3x3) in OpenCV format
+            D: optionally provide camera distortion coefficients (5x1) in OpenCV format
+            P: optionally provide camera projection matrix (3x4) in OpenCV format
         """
 
         self.gripperTopic = targetTopics[0]
@@ -86,6 +98,11 @@ class Robot:
         self.opacity = inputMeshOpacity
 
         self.meshPath = inputMeshPath
+
+        self.height = height
+        self.K = K
+        self.D = D
+        self.P = P
 
         self.plotter = BackgroundPlotter()
         self.gripperActor = None
@@ -256,8 +273,9 @@ class Robot:
         Helper function to set up the camera intrinsics
         """
         self.cam = self.plotter.camera
-        self.cam.view_angle = 70  # in degrees
-        self.cam.clipping_range = (0.001, 1.0) # in meters
+        # vertical fov using fy
+        self.cam.view_angle = np.rad2deg(2 * np.arctan(self.height / (2 * self.K[1, 1])))  
+        self.cam.clipping_range = (0.001, 2.0) # in meters
 
     def updateCamera(self, endoscope2base: np.array) -> None:
         """
@@ -402,6 +420,16 @@ if __name__ == "__main__":
         "--mesh_opacity",
         help="specify opacity value from (invisible) 0.0 - 1.0 (solid) (optional)",
     )
+    parser.add_argument(
+        "--camera_JSON",
+        help="provide path to .json file containing camera intrinsics "
+        "and distortion coefficients in the OpenCV camera calibration format (optional)"
+    )
+    parser.add_argument(
+        "--camera_height",
+        help="specify the height of the endoscope camera in pixels (optional, default=240)",
+        type=int
+    )
 
     args = parser.parse_args()
 
@@ -438,6 +466,24 @@ if __name__ == "__main__":
     else:
         meshOpacity = 0.5  # default opacity
 
+    if args.camera_JSON:  # handle optional camera intrinsics input
+        with open(args.camera_JSON, 'r') as f:
+            camera_data = json.load(f)
+
+        K = np.array(camera_data['K']).reshape(3, 3)  # camera intrinsics matrix
+        D = np.array(camera_data['D'])  # distortion coefficients
+        P = np.array(camera_data['P']).reshape(3, 4)  # projection matrix
+        # rectification matrix not used here
+    else:
+        K = None
+        D = None
+        P = None
+    
+    if args.camera_height:
+        height = args.camera_height
+    else:
+        height = 240  # default camera height in pixels
+
     # process the required marker2gripper
     rawMarker2Gripper = np.loadtxt(args.marker2gripper_matrix)
     inputMarker2Gripper = rawMarker2Gripper.reshape(4, 4)
@@ -450,5 +496,9 @@ if __name__ == "__main__":
         inputCTPose,
         inputMeshPath,
         meshOpacity,
+        height,
+        K,
+        D,
+        P
     )
     sinusRobot.runListeners()
