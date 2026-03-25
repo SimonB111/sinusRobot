@@ -48,6 +48,9 @@ python3 VisualizeRobotTracker.py <marker2gripper_matrix>
 - `--CT_pose <path>`: Path to CT scan pose matrix (optional).
 - `--CT_mesh <path>`: Path to CT mesh file (optional, defaults to `../example/Segmentation_Bone.stl`).
 - `--mesh_opacity <float>`: Opacity value (0.0-1.0, default: 0.5).
+- `--camera_JSON <path_to_camera_JSON>`: Optional, path to .json file containing camera intrinsics and distortion coefficients in the OpenCV camera calibration format.
+- `--camera_height <int>`: Optional, specify the height of the endoscope camera in pixels (default=240).
+
 
 **Example:**
 
